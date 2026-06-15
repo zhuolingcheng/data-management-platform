@@ -2437,11 +2437,27 @@
     async function clearCloudConsumptionRows() {
       if (!state.cloud.enabled || !state.cloud.user) throw new Error("请先登录云端账号");
       if (!canCloudEdit()) throw new Error("当前账号没有清空历史数据权限");
-      const { error } = await state.cloud.client
-        .from("consumption_rows")
-        .delete()
-        .neq("row_key", "__never__");
-      if (error) throw error;
+      state.cloud.loadId += 1;
+      state.cloud.loading = false;
+      const batchSize = 300;
+      let removed = 0;
+      for (;;) {
+        const { data, error: selectError } = await state.cloud.client
+          .from("consumption_rows")
+          .select("row_key")
+          .order("row_key", { ascending: true })
+          .limit(batchSize);
+        if (selectError) throw selectError;
+        const keys = (data || []).map(row => row.row_key).filter(Boolean);
+        if (!keys.length) break;
+        const { error: deleteError } = await state.cloud.client
+          .from("consumption_rows")
+          .delete()
+          .in("row_key", keys);
+        if (deleteError) throw deleteError;
+        removed += keys.length;
+        els.dbStatus.textContent = `数据库：正在分批清空云端历史数据，已清空 ${formatNumber(removed)} 行`;
+      }
     }
 
     async function mergeRowsToDb(rows) {
@@ -2507,6 +2523,7 @@
         return;
       }
       els.dbStatus.textContent = "数据库：正在清空云端历史数据";
+      els.clearHistoryBtn.disabled = true;
       try {
         await clearCloudConsumptionRows();
         await clearLocalRowsDb();
@@ -2516,6 +2533,8 @@
         const message = error.message || error;
         els.dbStatus.textContent = `数据库：清空失败（${message}）`;
         toast(`清空失败：${message}`);
+      } finally {
+        updateCloudUi();
       }
     }
 
