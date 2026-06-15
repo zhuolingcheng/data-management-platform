@@ -562,7 +562,7 @@
         <div class="side-grid">
           <button class="btn primary" type="button" id="uploadBtn">上传消耗数据</button>
           <button class="btn" type="button" id="mappingBtn">上传映射表</button>
-          <button class="btn" type="button" id="reloadDbBtn">读取累计数据库</button>
+          <button class="btn" type="button" id="reloadDbBtn">读取本地缓存</button>
           <button class="btn" type="button" id="exportBtn">导出当前数据</button>
         </div>
         <input class="file-input" type="file" id="dataInput" accept=".xlsx,.xls,.csv,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
@@ -2205,6 +2205,16 @@
       });
     }
 
+    async function loadCloudTargets() {
+      if (!state.cloud.enabled || !state.cloud.user) return false;
+      const targetRows = await fetchAllCloudRows("targets", "target_key,period_key,value");
+      state.targets = sanitizeTargets(targetsFromCloud(targetRows));
+      localStorage.setItem("dmp.targets", JSON.stringify(state.targets));
+      fillTargetForm();
+      renderTargetStatus();
+      return true;
+    }
+
     async function loadCloudData() {
       if (!state.cloud.enabled || !state.cloud.user) return;
       if (state.cloud.loading) {
@@ -2227,7 +2237,8 @@
         const payloads = dataRows.map(item => item.payload).filter(Boolean).map(enrichRow);
         if (payloads.length) {
           setRows(payloads, "Supabase 云端数据库");
-          els.dbStatus.textContent = `云端：已同步 ${formatNumber(payloads.length)} 行`;
+          if (state.dbReady) await mergeRowsToDb(payloads);
+          els.dbStatus.textContent = `云端：已同步并缓存 ${formatNumber(payloads.length)} 行`;
         } else {
           els.dbStatus.textContent = "云端：暂无消耗数据";
         }
@@ -2279,7 +2290,16 @@
       state.cloud.user = data.user;
       await loadCloudRole();
       updateCloudUi();
-      await loadCloudData();
+      try {
+        await loadCloudTargets();
+      } catch (error) {
+        toast(`目标数据同步失败：${error.message || error}`);
+      }
+      if (!state.allRows.length) {
+        await loadCloudData();
+      } else {
+        els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，需要最新数据时由管理员同步`;
+      }
       toast("已登录云端");
     }
 
@@ -2307,7 +2327,12 @@
         try {
           await loadCloudRole();
           updateCloudUi();
-          await loadCloudData();
+          await loadCloudTargets();
+          if (!state.allRows.length) {
+            await loadCloudData();
+          } else {
+            els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，需要最新数据时由管理员同步`;
+          }
         } catch (error) {
           toast(`云端初始化失败：${error.message || error}`);
           updateCloudUi();
@@ -2318,7 +2343,8 @@
         if (state.cloud.user) {
           try {
             await loadCloudRole();
-            await loadCloudData();
+            await loadCloudTargets();
+            if (!state.allRows.length) await loadCloudData();
           } catch (error) {
             toast(`云端同步失败：${error.message || error}`);
           }
@@ -2439,7 +2465,7 @@
         toast("当前账号只有查看权限，无法读取数据库");
         return;
       }
-      state.cloud.enabled && state.cloud.user ? loadCloudData() : refreshFromDb();
+      refreshFromDb();
     });
     els.cloudLoginBtn.addEventListener("click", cloudSignIn);
     els.cloudLogoutBtn.addEventListener("click", cloudSignOut);
@@ -2482,6 +2508,7 @@
           await upsertCloudConsumption(rows);
           const mergedRows = mergeRowsInMemory(state.allRows, rows);
           setRows(mergedRows, "Supabase 云端数据库");
+          if (state.dbReady) await mergeRowsToDb(rows);
           els.dbStatus.textContent = `云端：已上传/合并 ${formatNumber(rows.length)} 行，当前显示 ${formatNumber(mergedRows.length)} 行`;
           toast(`${file.name} 已上传到云端`);
         } catch (error) {
@@ -2540,14 +2567,18 @@
       XLSX.writeFile(workbook, `数据管理平台-当前筛选数据-${new Date().toISOString().slice(0, 10)}.xlsx`);
     });
 
-    updateMonthProgress();
-    setInterval(updateMonthProgress, 1000);
-    loadTargets();
-    loadStoredMapping();
-    const preloadedRows = window.PRELOADED_DATASET?.rows || [];
-    if (preloadedRows.length) setRows(preloadedRows, window.PRELOADED_DATASET.name || "消耗明细");
-    initDb(preloadedRows);
-    initCloud();
+    async function boot() {
+      updateMonthProgress();
+      setInterval(updateMonthProgress, 1000);
+      loadTargets();
+      loadStoredMapping();
+      const preloadedRows = window.PRELOADED_DATASET?.rows || [];
+      if (preloadedRows.length) setRows(preloadedRows, window.PRELOADED_DATASET.name || "消耗明细");
+      await initDb(preloadedRows);
+      await initCloud();
+    }
+
+    boot();
   </script>
 </body>
 </html>
