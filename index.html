@@ -148,6 +148,9 @@
       grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
+    .cloud-sync-action {
+      margin-top: 10px;
+    }
     .file-input { display: none; }
 
     .main {
@@ -583,7 +586,7 @@
           <button class="btn primary" type="button" id="cloudLoginBtn">登录</button>
           <button class="btn" type="button" id="cloudLogoutBtn">退出</button>
         </div>
-        <button class="btn" type="button" id="cloudReloadBtn">同步云端数据</button>
+        <button class="btn cloud-sync-action" type="button" id="cloudReloadBtn">同步云端数据</button>
         <div class="side-note" id="cloudStatus">云端：未连接</div>
       </section>
 
@@ -2134,9 +2137,9 @@
       const roleText = state.cloud.role ? `，权限：${state.cloud.role}` : "";
       els.cloudStatus.textContent = email ? `云端：已登录 ${email}${roleText}` : "云端：未登录";
       const locked = Boolean(state.cloud.user) && !canCloudEdit();
-      [els.uploadBtn, els.mappingBtn, els.saveTargetsBtn, els.clearTargetsBtn].forEach(button => {
+      [els.uploadBtn, els.mappingBtn, els.reloadDbBtn, els.cloudReloadBtn, els.saveTargetsBtn, els.clearTargetsBtn].forEach(button => {
         button.disabled = locked;
-        button.title = locked ? "当前账号只有查看权限" : "";
+        button.title = locked ? "当前账号只有查看权限，无法操作数据同步" : "";
       });
     }
 
@@ -2416,10 +2419,22 @@
 
     els.uploadBtn.addEventListener("click", () => els.dataInput.click());
     els.mappingBtn.addEventListener("click", () => els.mappingInput.click());
-    els.reloadDbBtn.addEventListener("click", () => state.cloud.enabled && state.cloud.user ? loadCloudData() : refreshFromDb());
+    els.reloadDbBtn.addEventListener("click", () => {
+      if (state.cloud.user && !canCloudEdit()) {
+        toast("当前账号只有查看权限，无法读取数据库");
+        return;
+      }
+      state.cloud.enabled && state.cloud.user ? loadCloudData() : refreshFromDb();
+    });
     els.cloudLoginBtn.addEventListener("click", cloudSignIn);
     els.cloudLogoutBtn.addEventListener("click", cloudSignOut);
-    els.cloudReloadBtn.addEventListener("click", loadCloudData);
+    els.cloudReloadBtn.addEventListener("click", () => {
+      if (state.cloud.user && !canCloudEdit()) {
+        toast("当前账号只有查看权限，无法同步云端数据");
+        return;
+      }
+      loadCloudData();
+    });
     els.reportPageBtn.addEventListener("click", () => showPage("report"));
     els.targetPageBtn.addEventListener("click", () => showPage("target"));
     els.saveTargetsBtn.addEventListener("click", saveTargetsFromForm);
