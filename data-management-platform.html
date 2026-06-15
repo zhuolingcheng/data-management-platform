@@ -129,6 +129,11 @@
       opacity: .52;
       cursor: not-allowed;
     }
+    .btn.danger {
+      border-color: rgba(185, 28, 28, .35);
+      background: #fff5f5;
+      color: #b91c1c;
+    }
     .sidebar .btn {
       width: 100%;
       border-color: rgba(255,255,255,.14);
@@ -564,6 +569,7 @@
           <button class="btn" type="button" id="mappingBtn">上传映射表</button>
           <button class="btn" type="button" id="reloadDbBtn">读取本地缓存</button>
           <button class="btn" type="button" id="exportBtn">导出当前数据</button>
+          <button class="btn danger" type="button" id="clearHistoryBtn">清空历史数据</button>
         </div>
         <input class="file-input" type="file" id="dataInput" accept=".xlsx,.xls,.csv,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
         <input class="file-input" type="file" id="mappingInput" accept=".xlsx,.xls,.csv,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
@@ -963,6 +969,7 @@
       uploadBtn: document.getElementById("uploadBtn"),
       mappingBtn: document.getElementById("mappingBtn"),
       reloadDbBtn: document.getElementById("reloadDbBtn"),
+      clearHistoryBtn: document.getElementById("clearHistoryBtn"),
       exportBtn: document.getElementById("exportBtn"),
       reportPageBtn: document.getElementById("reportPageBtn"),
       targetPageBtn: document.getElementById("targetPageBtn"),
@@ -2156,7 +2163,7 @@
       const roleText = state.cloud.role ? `，权限：${state.cloud.role}` : "";
       els.cloudStatus.textContent = email ? `云端：已登录 ${email}${roleText}` : "云端：未登录";
       const locked = Boolean(state.cloud.user) && !canCloudEdit();
-      [els.uploadBtn, els.mappingBtn, els.reloadDbBtn, els.cloudReloadBtn, els.saveTargetsBtn, els.clearTargetsBtn].forEach(button => {
+      [els.uploadBtn, els.mappingBtn, els.reloadDbBtn, els.clearHistoryBtn, els.cloudReloadBtn, els.saveTargetsBtn, els.clearTargetsBtn].forEach(button => {
         button.disabled = locked;
         button.title = locked ? "当前账号只有查看权限，无法操作数据同步" : "";
       });
@@ -2213,6 +2220,34 @@
       fillTargetForm();
       renderTargetStatus();
       return true;
+    }
+
+    async function getCloudConsumptionCount() {
+      if (!state.cloud.enabled || !state.cloud.user) return null;
+      const { count, error } = await state.cloud.client
+        .from("consumption_rows")
+        .select("row_key", { count: "exact", head: true });
+      if (error) throw error;
+      return count;
+    }
+
+    async function syncCloudDataIfNeeded() {
+      const cloudCount = await getCloudConsumptionCount();
+      if (!Number.isFinite(cloudCount)) return;
+      if (cloudCount === 0) {
+        if (state.allRows.length) {
+          await clearLocalRowsDb();
+          resetRowsAfterClear();
+        }
+        els.dbStatus.textContent = "云端：暂无消耗数据，请重新上传";
+        return;
+      }
+      if (state.allRows.length !== cloudCount) {
+        els.dbStatus.textContent = `云端：检测到 ${formatNumber(cloudCount)} 行，本地缓存 ${formatNumber(state.allRows.length)} 行，正在同步`;
+        await loadCloudData();
+        return;
+      }
+      els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，云端行数一致`;
     }
 
     async function loadCloudData() {
@@ -2295,11 +2330,7 @@
       } catch (error) {
         toast(`目标数据同步失败：${error.message || error}`);
       }
-      if (!state.allRows.length) {
-        await loadCloudData();
-      } else {
-        els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，需要最新数据时由管理员同步`;
-      }
+      await syncCloudDataIfNeeded();
       toast("已登录云端");
     }
 
@@ -2328,11 +2359,7 @@
           await loadCloudRole();
           updateCloudUi();
           await loadCloudTargets();
-          if (!state.allRows.length) {
-            await loadCloudData();
-          } else {
-            els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，需要最新数据时由管理员同步`;
-          }
+          await syncCloudDataIfNeeded();
         } catch (error) {
           toast(`云端初始化失败：${error.message || error}`);
           updateCloudUi();
@@ -2344,7 +2371,7 @@
           try {
             await loadCloudRole();
             await loadCloudTargets();
-            if (!state.allRows.length) await loadCloudData();
+            await syncCloudDataIfNeeded();
           } catch (error) {
             toast(`云端同步失败：${error.message || error}`);
           }
@@ -2407,6 +2434,16 @@
       return true;
     }
 
+    async function clearCloudConsumptionRows() {
+      if (!state.cloud.enabled || !state.cloud.user) throw new Error("请先登录云端账号");
+      if (!canCloudEdit()) throw new Error("当前账号没有清空历史数据权限");
+      const { error } = await state.cloud.client
+        .from("consumption_rows")
+        .delete()
+        .neq("row_key", "__never__");
+      if (error) throw error;
+    }
+
     async function mergeRowsToDb(rows) {
       if (!state.db) return;
       const batchSize = 2000;
@@ -2429,6 +2466,57 @@
         request.onsuccess = () => resolve((request.result || []).map(item => item.row));
         request.onerror = () => reject(request.error);
       });
+    }
+
+    async function clearLocalRowsDb() {
+      if (!state.db) return;
+      await new Promise((resolve, reject) => {
+        const tx = state.db.transaction("rows", "readwrite");
+        tx.objectStore("rows").clear();
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    function resetRowsAfterClear() {
+      state.allRows = [];
+      state.rows = [];
+      state.months = [];
+      state.selectedMonth = "all";
+      state.selectedStart = "";
+      state.selectedEnd = "";
+      state.fileName = "历史数据已清空";
+      configureFilters();
+      applyFilters();
+      render();
+      els.dbStatus.textContent = "数据库：已清空，等待重新上传";
+    }
+
+    async function clearHistoricalData() {
+      if (!state.cloud.enabled || !state.cloud.user) {
+        toast("请先登录云端账号后再清空历史数据");
+        return;
+      }
+      if (!canCloudEdit()) {
+        toast("当前账号只有查看权限，无法清空历史数据");
+        return;
+      }
+      const answer = window.prompt("此操作会清空云端消耗明细和本地缓存，但保留目标填报。请输入“清空”确认。");
+      if (answer !== "清空") {
+        toast("已取消清空历史数据");
+        return;
+      }
+      els.dbStatus.textContent = "数据库：正在清空云端历史数据";
+      try {
+        await clearCloudConsumptionRows();
+        await clearLocalRowsDb();
+        resetRowsAfterClear();
+        toast("历史数据已清空，请重新上传消耗明细");
+      } catch (error) {
+        const message = error.message || error;
+        els.dbStatus.textContent = `数据库：清空失败（${message}）`;
+        toast(`清空失败：${message}`);
+      }
     }
 
     async function initDb(preloaded) {
@@ -2467,6 +2555,7 @@
       }
       refreshFromDb();
     });
+    els.clearHistoryBtn.addEventListener("click", clearHistoricalData);
     els.cloudLoginBtn.addEventListener("click", cloudSignIn);
     els.cloudLogoutBtn.addEventListener("click", cloudSignOut);
     els.cloudReloadBtn.addEventListener("click", () => {
