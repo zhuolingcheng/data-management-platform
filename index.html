@@ -2439,7 +2439,19 @@
       if (!canCloudEdit()) throw new Error("当前账号没有清空历史数据权限");
       state.cloud.loadId += 1;
       state.cloud.loading = false;
-      const batchSize = 300;
+      els.dbStatus.textContent = "数据库：正在请求云端快速清空";
+      try {
+        const { data, error } = await state.cloud.client.rpc("clear_consumption_rows");
+        if (error) throw error;
+        const removed = Number(data) || 0;
+        els.dbStatus.textContent = `数据库：云端已快速清空 ${formatNumber(removed)} 行`;
+        return;
+      } catch (error) {
+        const message = error.message || String(error);
+        if (!/clear_consumption_rows|schema cache|function/i.test(message)) throw error;
+        els.dbStatus.textContent = "数据库：快速清空函数未配置，改用小批量清空";
+      }
+      const batchSize = 25;
       let removed = 0;
       for (;;) {
         const { data, error: selectError } = await state.cloud.client
