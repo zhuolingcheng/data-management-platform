@@ -568,7 +568,7 @@
         <input class="file-input" type="file" id="dataInput" accept=".xlsx,.xls,.csv,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
         <input class="file-input" type="file" id="mappingInput" accept=".xlsx,.xls,.csv,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
         <div class="side-note" id="dataStatus">数据：初始化中</div>
-        <div class="side-note" id="mappingStatus">映射：初始化中</div>
+        <div class="side-note" id="mappingStatus">映射：当前报表未使用</div>
         <div class="side-note" id="dbStatus">数据库：初始化中</div>
       </section>
 
@@ -1115,9 +1115,8 @@
       const next = { ...row };
       next["月份"] = next["月份"] || monthFromDate(next["日期"]);
       next["商务组"] = businessGroup(next["商务"]);
-      const mapped = lookupDirectChannel(next);
-      next["直客or渠道"] = mapped.value;
-      next["匹配状态"] = mapped.matched ? "已匹配" : "未匹配";
+      const canonicalMode = cooperationMode(next);
+      if (canonicalMode && !normalizeText(next["合作模式-DOSS"])) next["合作模式-DOSS"] = canonicalMode;
       return next;
     }
 
@@ -1149,10 +1148,7 @@
       state.mappingRows = validRows;
       state.mappingMap = map;
       if (persist) localStorage.setItem("dmp.directChannelMapping", JSON.stringify(validRows));
-      state.allRows = state.allRows.map(enrichRow);
       renderMappingStatus();
-      applyFilters();
-      render();
       return true;
     }
 
@@ -1494,12 +1490,33 @@
       return String(row["媒体端口"] ?? "").toUpperCase().includes("AD");
     }
 
+    function cooperationMode(row) {
+      const candidates = [
+        row["合作模式-DOSS"],
+        row["合作模式"],
+        row["DOSS合作模式"],
+        row["合作模式DOSS"],
+        row["账户合作模式"],
+        row["客户合作模式"],
+        row["业务模式"],
+        row["业务类型"]
+      ];
+      const text = candidates.map(normalizeText).find(Boolean) || "";
+      if (text.includes("代运营")) return "代运营";
+      if (text.includes("代充值")) return "代充值";
+      return text;
+    }
+
+    function isMode(row, mode) {
+      return cooperationMode(row) === mode;
+    }
+
     function isOperation(row) {
-      return row["合作模式-DOSS"] === "代运营";
+      return isMode(row, "代运营");
     }
 
     function isRecharge(row) {
-      return row["合作模式-DOSS"] === "代充值";
+      return isMode(row, "代充值");
     }
 
     function isLocalOperation(row) {
@@ -1619,7 +1636,7 @@
       const groups = ["商务一组", "商务二组", "其他组"];
       return groups.map(group => ({
         name: group,
-        data: dailySeries(rows, start, end, row => isLocalPush(row) && row["合作模式-DOSS"] === mode && row["商务组"] === group)
+        data: dailySeries(rows, start, end, row => isLocalPush(row) && isMode(row, mode) && row["商务组"] === group)
       }));
     }
 
@@ -1879,16 +1896,16 @@
     function renderModeModule(mode, cardContainer, chartContainer, quarter, month, day, ref) {
       const quarterEnd = ref && ref < quarter.end ? ref : quarter.end;
       const monthEnd = ref && ref < month.end ? ref : month.end;
-      const currentQuarterRows = periodRows(quarter.start, quarterEnd).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
-      const previousQuarterRows = comparableRows(quarter, "quarter", quarterEnd).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
-      const currentMonthRows = periodRows(month.start, monthEnd).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
-      const previousMonthRows = comparableRows(month, "month", monthEnd).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
-      const currentDayRows = periodRows(day.start, day.end).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
-      const previousDayRows = comparableRows(day, "day", day.end).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
+      const currentQuarterRows = periodRows(quarter.start, quarterEnd).filter(row => isLocalPush(row) && isMode(row, mode));
+      const previousQuarterRows = comparableRows(quarter, "quarter", quarterEnd).filter(row => isLocalPush(row) && isMode(row, mode));
+      const currentMonthRows = periodRows(month.start, monthEnd).filter(row => isLocalPush(row) && isMode(row, mode));
+      const previousMonthRows = comparableRows(month, "month", monthEnd).filter(row => isLocalPush(row) && isMode(row, mode));
+      const currentDayRows = periodRows(day.start, day.end).filter(row => isLocalPush(row) && isMode(row, mode));
+      const previousDayRows = comparableRows(day, "day", day.end).filter(row => isLocalPush(row) && isMode(row, mode));
       const groups = ["商务一组", "商务二组"];
       const cards = [];
       const previousBounds = previousComparableBounds(month, "month");
-      const previousFullMonthRows = periodRows(previousBounds.start, previousBounds.end).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
+      const previousFullMonthRows = periodRows(previousBounds.start, previousBounds.end).filter(row => isLocalPush(row) && isMode(row, mode));
       const modeTargetKey = mode === "代运营" ? "monthOperation" : "monthRecharge";
       const currentMonthTotal = sumNonGrant(currentMonthRows);
       const previousMonthTotal = sumNonGrant(previousMonthRows);
@@ -2066,7 +2083,9 @@
     }
 
     function renderMappingStatus() {
-      els.mappingStatus.textContent = state.mappingMap.size ? `映射：已加载 ${formatNumber(state.mappingMap.size)} 条规则` : "映射：未加载";
+      els.mappingStatus.textContent = state.mappingMap.size
+        ? `映射：已加载 ${formatNumber(state.mappingMap.size)} 条规则（当前报表未使用）`
+        : "映射：当前报表未使用";
     }
 
     function toast(message) {
@@ -2203,13 +2222,9 @@
         localStorage.setItem("dmp.targets", JSON.stringify(state.targets));
         fillTargetForm();
         renderTargetStatus();
-        const mappingRows = await fetchAllCloudRows("mapping_rows", "payload", { label: "映射表", loadId });
-        if (loadId !== state.cloud.loadId) return;
-        const mappingPayloads = mappingRows.map(item => item.payload).filter(Boolean);
-        if (mappingPayloads.length) configureMapping(mappingPayloads, false);
         const dataRows = await fetchAllCloudRows("consumption_rows", "payload", { label: "消耗数据", loadId });
         if (loadId !== state.cloud.loadId) return;
-        const payloads = dataRows.map(item => item.payload).filter(Boolean);
+        const payloads = dataRows.map(item => item.payload).filter(Boolean).map(enrichRow);
         if (payloads.length) {
           setRows(payloads, "Supabase 云端数据库");
           els.dbStatus.textContent = `云端：已同步 ${formatNumber(payloads.length)} 行`;
@@ -2494,13 +2509,13 @@
           }
           try {
             await upsertCloudMapping(rows);
-            toast(`映射表已上传云端：${state.mappingMap.size} 条规则`);
+            toast(`映射表已上传云端：${state.mappingMap.size} 条规则，当前报表暂不使用`);
           } catch (error) {
             toast(`映射表云端上传失败：${error.message || error}`);
           }
           return;
         }
-        toast(`映射表已加载：${state.mappingMap.size} 条规则`);
+        toast(`映射表已加载：${state.mappingMap.size} 条规则，当前报表暂不使用`);
       }
     });
     els.monthFilter.addEventListener("change", () => {
