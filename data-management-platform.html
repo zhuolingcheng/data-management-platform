@@ -1,0 +1,2495 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>经营数据总览</title>
+  <style>
+    :root {
+      --bg: #f5f7f9;
+      --panel: #fff;
+      --ink: #1d252d;
+      --muted: #66727f;
+      --line: #d9e0e7;
+      --soft: #e7f3f1;
+      --accent: #16776d;
+      --blue: #345a8a;
+      --red: #b65345;
+      --gold: #8a6f2c;
+      --shadow: 0 12px 28px rgba(30,45,55,.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Inter", "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+    button, input, select { font: inherit; }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 292px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: #18232d;
+      color: #eef5f4;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 44px;
+    }
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, #25a094, #345a8a);
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.15;
+    }
+
+    .side-section {
+      border-top: 1px solid rgba(255,255,255,.14);
+      padding-top: 14px;
+    }
+    .side-section h2 {
+      margin: 0 0 10px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 750;
+    }
+    .side-note {
+      color: #afc0c0;
+      font-size: 12px;
+      line-height: 1.5;
+      margin-top: 8px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .field label {
+      color: #c7d6d5;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .field input, .field select {
+      width: 100%;
+      height: 36px;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 8px;
+      padding: 0 10px;
+      background: #22303c;
+      color: #fff;
+    }
+
+    .btn {
+      height: 38px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn:disabled {
+      opacity: .52;
+      cursor: not-allowed;
+    }
+    .sidebar .btn {
+      width: 100%;
+      border-color: rgba(255,255,255,.14);
+    }
+    .side-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .page-nav .btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .target-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .file-input { display: none; }
+
+    .main {
+      min-width: 0;
+      padding: 22px;
+    }
+    .page-view.is-hidden { display: none; }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+    .title h2 {
+      margin: 0 0 5px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+    .title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .progress-card {
+      min-width: 340px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+    .progress-card span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .progress-card strong {
+      display: block;
+      margin: 5px 0 10px;
+      font-size: 20px;
+    }
+    .progress-track {
+      height: 9px;
+      background: #edf1f4;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), var(--blue));
+    }
+    .progress-meta {
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .report-section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .section-head {
+      min-height: 54px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .section-head h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .section-body { padding: 16px; }
+
+    .target-form {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(180px, 1fr));
+      gap: 14px;
+    }
+    .target-form-heading {
+      grid-column: 1 / -1;
+      margin: 8px 0 0;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 750;
+    }
+    .target-form-heading:first-child {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: 0;
+    }
+    .target-form .field {
+      margin-bottom: 0;
+    }
+    .target-form .field label {
+      color: var(--muted);
+    }
+    .target-form .field input,
+    .target-form .field select {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .target-form-actions {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    .target-form-actions .btn {
+      min-width: 120px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .cards.three { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+      min-width: 0;
+    }
+    .card span {
+      color: var(--muted);
+      font-size: 12px;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .card strong {
+      font-size: 22px;
+      line-height: 1.1;
+      display: block;
+      overflow-wrap: anywhere;
+    }
+    .card small {
+      display: block;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .card small.up { color: var(--red); }
+    .card small.down { color: var(--accent); }
+    .card small.target-line {
+      color: var(--blue);
+      font-weight: 700;
+    }
+    .card small.target-ok { color: var(--accent); }
+    .card small.target-warn { color: var(--gold); }
+    .up { color: var(--red); }
+    .down { color: var(--accent); }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .triple {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .table-wrap {
+      overflow: auto;
+      max-height: 420px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 520px;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #edf1f4;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: #f9fbfc;
+      color: #3b4650;
+      z-index: 1;
+    }
+    .industry-table {
+      width: 414px;
+      min-width: 414px;
+      table-layout: fixed;
+    }
+    .industry-table th:nth-child(1),
+    .industry-table td:nth-child(1) {
+      position: sticky;
+      left: 0;
+      width: 64px;
+      min-width: 64px;
+      background: #fff;
+      z-index: 2;
+    }
+    .industry-table th:nth-child(2),
+    .industry-table td:nth-child(2) {
+      position: sticky;
+      left: 64px;
+      width: 100px;
+      min-width: 100px;
+      max-width: 100px;
+      background: #fff;
+      box-shadow: 1px 0 0 #edf1f4;
+      z-index: 2;
+    }
+    .industry-table th:nth-child(1),
+    .industry-table th:nth-child(2) {
+      background: #f9fbfc;
+      z-index: 3;
+    }
+    .industry-table th:nth-child(3),
+    .industry-table td:nth-child(3) {
+      width: 80px;
+      min-width: 80px;
+      max-width: 80px;
+    }
+    .industry-table th:nth-child(4),
+    .industry-table td:nth-child(4) {
+      width: 70px;
+      min-width: 70px;
+      max-width: 70px;
+    }
+    .industry-table th:nth-child(5),
+    .industry-table td:nth-child(5) {
+      width: 100px;
+      min-width: 100px;
+      max-width: 100px;
+    }
+
+    .chart-panel {
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+    }
+    .chart-panel h4 {
+      margin: 0 0 10px;
+      font-size: 14px;
+    }
+    .trend-chart {
+      width: 100%;
+      height: 300px;
+      display: block;
+    }
+    .bar-list {
+      display: grid;
+      gap: 8px;
+    }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) 86px;
+      gap: 10px;
+      align-items: center;
+      min-height: 34px;
+      font-size: 13px;
+    }
+    .bar-rank {
+      color: var(--muted);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .bar-body {
+      min-width: 0;
+    }
+    .bar-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .bar-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--ink);
+    }
+    .bar-track {
+      height: 7px;
+      border-radius: 999px;
+      background: #edf1f4;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent), var(--blue));
+    }
+    .bar-value {
+      color: var(--muted);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .toast {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      background: #17222b;
+      color: #fff;
+      border-radius: 8px;
+      padding: 11px 13px;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition: .2s ease;
+      max-width: min(420px, calc(100vw - 40px));
+      font-size: 13px;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 1200px) {
+      .app { grid-template-columns: 250px minmax(0, 1fr); }
+      .cards { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+      .topbar { flex-direction: column; }
+      .progress-card { min-width: 0; width: 100%; }
+    }
+    @media (max-width: 820px) {
+      .app { display: block; }
+      .sidebar { position: static; height: auto; }
+      .main { padding: 14px; }
+      .cards, .cards.three, .split, .triple, .target-form { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+            <path d="M5 16.5V8.2c0-1.4 3.1-2.6 7-2.6s7 1.2 7 2.6v8.3c0 1.4-3.1 2.5-7 2.5s-7-1.1-7-2.5Z" stroke="white" stroke-width="1.7"/>
+            <path d="M5 8.3c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5M5 12.4c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5" stroke="white" stroke-width="1.7"/>
+          </svg>
+        </div>
+        <h1>经营数据总览</h1>
+      </div>
+
+      <section class="side-section">
+        <h2>功能页面</h2>
+        <div class="side-grid page-nav">
+          <button class="btn primary active" type="button" id="reportPageBtn">可视化报表</button>
+          <button class="btn" type="button" id="targetPageBtn">目标填报</button>
+        </div>
+      </section>
+
+      <section class="side-section">
+        <h2>数据导入与导出</h2>
+        <div class="side-grid">
+          <button class="btn primary" type="button" id="uploadBtn">上传消耗数据</button>
+          <button class="btn" type="button" id="mappingBtn">上传映射表</button>
+          <button class="btn" type="button" id="reloadDbBtn">读取累计数据库</button>
+          <button class="btn" type="button" id="exportBtn">导出当前数据</button>
+        </div>
+        <input class="file-input" type="file" id="dataInput" accept=".xlsx,.xls,.csv,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        <input class="file-input" type="file" id="mappingInput" accept=".xlsx,.xls,.csv,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        <div class="side-note" id="dataStatus">数据：初始化中</div>
+        <div class="side-note" id="mappingStatus">映射：初始化中</div>
+        <div class="side-note" id="dbStatus">数据库：初始化中</div>
+      </section>
+
+      <section class="side-section" id="cloudSection">
+        <h2>团队云端</h2>
+        <div class="field">
+          <label for="cloudEmail">邮箱</label>
+          <input type="email" id="cloudEmail" autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="cloudPassword">密码</label>
+          <input type="password" id="cloudPassword" autocomplete="current-password">
+        </div>
+        <div class="target-actions">
+          <button class="btn primary" type="button" id="cloudLoginBtn">登录</button>
+          <button class="btn" type="button" id="cloudLogoutBtn">退出</button>
+        </div>
+        <button class="btn" type="button" id="cloudReloadBtn">同步云端数据</button>
+        <div class="side-note" id="cloudStatus">云端：未连接</div>
+      </section>
+
+      <section class="side-section">
+        <h2>报表筛选</h2>
+        <div class="field">
+          <label for="monthFilter">月份</label>
+          <select id="monthFilter"></select>
+        </div>
+        <div class="field">
+          <label for="dateStart">开始日期</label>
+          <input type="date" id="dateStart">
+        </div>
+        <div class="field">
+          <label for="dateEnd">结束日期</label>
+          <input type="date" id="dateEnd">
+        </div>
+        <div class="side-note" id="filterStatus">筛选：全部数据</div>
+      </section>
+    </aside>
+
+    <main class="main">
+      <div class="page-view" id="reportView">
+      <header class="topbar">
+        <div class="title">
+          <h2>可视化报表</h2>
+          <p id="subtitle">非赠款消耗口径，按年度、季度、月度、自然周、昨日与商务维度展示</p>
+        </div>
+        <section class="progress-card" aria-label="本月时间进度">
+          <span>本月时间进度</span>
+          <strong id="countdown">--</strong>
+          <div class="progress-track"><div class="progress-bar" id="monthProgressBar"></div></div>
+          <div class="progress-meta">
+            <span id="monthProgressText">--</span>
+            <span id="monthProgressPercent">--</span>
+          </div>
+        </section>
+      </header>
+
+      <section class="report-section" id="annualSection">
+        <div class="section-head">
+          <h3>年度数据</h3>
+          <span class="tag" id="annualTag">--</span>
+        </div>
+        <div class="section-body"><div class="cards" id="annualCards"></div></div>
+      </section>
+
+      <section class="report-section" id="quarterSection">
+        <div class="section-head">
+          <h3>季度数据</h3>
+          <span class="tag" id="quarterTag">--</span>
+        </div>
+        <div class="section-body">
+          <div class="cards" id="quarterCards"></div>
+          <div class="chart-panel">
+            <h4>本季度本地推每日消耗趋势</h4>
+            <div id="quarterTrend"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section" id="monthSection">
+        <div class="section-head">
+          <h3>月度数据</h3>
+          <span class="tag" id="monthTag">--</span>
+        </div>
+        <div class="section-body">
+          <div class="cards" id="monthCards"></div>
+          <div class="chart-panel">
+            <h4>本月本地推每日消耗趋势</h4>
+            <div id="monthTrend"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section" id="weekSection">
+        <div class="section-head">
+          <h3>周度数据（自然周）</h3>
+          <span class="tag" id="weekTag">--</span>
+        </div>
+        <div class="section-body"><div class="cards" id="weekCards"></div></div>
+      </section>
+
+      <section class="report-section" id="yesterdaySection">
+        <div class="section-head">
+          <h3>昨日数据</h3>
+          <span class="tag" id="dayTag">--</span>
+        </div>
+        <div class="section-body">
+          <div class="cards" id="dayCards"></div>
+          <div class="split">
+            <div class="chart-panel">
+              <h4>昨日消耗 Top20 商机</h4>
+              <div id="dayTopOpportunity"></div>
+            </div>
+            <div class="chart-panel">
+              <h4>昨日消耗 Top20 广告主主体</h4>
+              <div id="dayTopAdvertiser"></div>
+            </div>
+          </div>
+          <div class="chart-panel">
+            <h4>近30天本地推每日消耗趋势</h4>
+            <div id="dayTrend"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section" id="businessSection">
+        <div class="section-head">
+          <h3>商务模块（仅本地推）</h3>
+          <span class="tag" id="businessTag">按商务组与商务排名</span>
+        </div>
+        <div class="section-body">
+          <h3 style="margin:0 0 12px;font-size:15px">商务组消耗</h3>
+          <div class="cards three" id="businessGroupCards"></div>
+          <div class="split">
+            <div>
+              <h3 style="margin:0 0 12px;font-size:15px">所有商务月度消耗排名</h3>
+              <div class="table-wrap" id="businessMonthRanking"></div>
+            </div>
+            <div>
+              <h3 style="margin:0 0 12px;font-size:15px">所有商务昨日消耗排名</h3>
+              <div class="table-wrap" id="businessDayRanking"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section" id="operationSection">
+        <div class="section-head">
+          <h3>代运营模块（仅本地推）</h3>
+          <span class="tag">非赠款消耗</span>
+        </div>
+        <div class="section-body">
+          <div class="cards" id="operationCards"></div>
+          <div class="chart-panel">
+            <h4>代运营三组日耗趋势</h4>
+            <div id="operationTrend"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section" id="rechargeSection">
+        <div class="section-head">
+          <h3>代充值模块（仅本地推）</h3>
+          <span class="tag">非赠款消耗</span>
+        </div>
+        <div class="section-body">
+          <div class="cards" id="rechargeCards"></div>
+          <div class="chart-panel">
+            <h4>代充值三组日耗趋势</h4>
+            <div id="rechargeTrend"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section" id="newCustomerSection">
+        <div class="section-head">
+          <h3>新开客户模块</h3>
+          <span class="tag" id="newCustomerTag">本月新增商机主体</span>
+        </div>
+        <div class="section-body">
+          <div class="cards three" id="newCustomerCards"></div>
+          <div class="split">
+            <div>
+              <h3 style="margin:0 0 12px;font-size:15px">当月新开客户数商务排行</h3>
+              <div class="table-wrap" id="newCustomerRanking"></div>
+            </div>
+            <div>
+              <h3 style="margin:0 0 12px;font-size:15px">当月新开客户明细</h3>
+              <div class="table-wrap" id="newCustomerDetail"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section" id="industrySection">
+        <div class="section-head">
+          <h3>行业划分模块（仅本地推）</h3>
+          <span class="tag">一级行业 · 非赠款消耗</span>
+        </div>
+        <div class="section-body">
+          <div class="triple">
+            <div>
+              <h3 style="margin:0 0 12px;font-size:15px">全年行业消耗</h3>
+              <div class="table-wrap" id="industryYearTable"></div>
+            </div>
+            <div>
+              <h3 style="margin:0 0 12px;font-size:15px">季度行业消耗</h3>
+              <div class="table-wrap" id="industryQuarterTable"></div>
+            </div>
+            <div>
+              <h3 style="margin:0 0 12px;font-size:15px">月度行业消耗</h3>
+              <div class="table-wrap" id="industryMonthTable"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      </div>
+
+      <div class="page-view is-hidden" id="targetView">
+        <header class="topbar">
+          <div class="title">
+            <h2>目标填报</h2>
+            <p>所有目标均为本地推非赠款消耗目标，按年份、季度、月份分别保存</p>
+          </div>
+        </header>
+
+        <section class="report-section">
+          <div class="section-head">
+            <h3>目标填报</h3>
+            <span class="tag" id="targetStatus">目标：未填报</span>
+          </div>
+          <div class="section-body">
+            <div class="target-form">
+              <div class="target-form-heading">整体年度目标</div>
+              <div class="field">
+                <label for="targetYearSelect">年度目标年份</label>
+                <select id="targetYearSelect"></select>
+              </div>
+              <div class="field">
+                <label for="targetAnnualTotal">年度本地推总目标</label>
+                <input type="number" min="0" step="0.01" id="targetAnnualTotal" data-target-key="annualTotal">
+              </div>
+              <div class="field">
+                <label for="targetAnnualOperation">年度本地推代运营目标</label>
+                <input type="number" min="0" step="0.01" id="targetAnnualOperation" data-target-key="annualOperation">
+              </div>
+              <div class="field">
+                <label for="targetAnnualRecharge">年度本地推代充值目标</label>
+                <input type="number" min="0" step="0.01" id="targetAnnualRecharge" data-target-key="annualRecharge">
+              </div>
+
+              <div class="target-form-heading">整体季度目标</div>
+              <div class="field">
+                <label for="targetQuarterSelect">季度目标季度</label>
+                <select id="targetQuarterSelect"></select>
+              </div>
+              <div class="field">
+                <label for="targetQuarterTotal">季度本地推总目标</label>
+                <input type="number" min="0" step="0.01" id="targetQuarterTotal" data-target-key="quarterTotal">
+              </div>
+              <div class="field">
+                <label for="targetQuarterOperation">季度本地推代运营目标</label>
+                <input type="number" min="0" step="0.01" id="targetQuarterOperation" data-target-key="quarterOperation">
+              </div>
+              <div class="field">
+                <label for="targetQuarterRecharge">季度本地推代充值目标</label>
+                <input type="number" min="0" step="0.01" id="targetQuarterRecharge" data-target-key="quarterRecharge">
+              </div>
+
+              <div class="target-form-heading">整体月度目标</div>
+              <div class="field">
+                <label for="targetMonthSelect">月度目标月份</label>
+                <select id="targetMonthSelect"></select>
+              </div>
+              <div class="field">
+                <label for="targetMonthTotal">月度本地推总目标</label>
+                <input type="number" min="0" step="0.01" id="targetMonthTotal" data-target-key="monthTotal">
+              </div>
+              <div class="field">
+                <label for="targetMonthOperation">月度本地推代运营目标</label>
+                <input type="number" min="0" step="0.01" id="targetMonthOperation" data-target-key="monthOperation">
+              </div>
+              <div class="field">
+                <label for="targetMonthRecharge">月度本地推代充值目标</label>
+                <input type="number" min="0" step="0.01" id="targetMonthRecharge" data-target-key="monthRecharge">
+              </div>
+
+              <div class="target-form-heading">商务一组季度目标</div>
+              <div class="field">
+                <label for="targetBusinessGroup1QuarterTotal">商务一组季度总目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup1QuarterTotal" data-target-key="businessGroup1QuarterTotal">
+              </div>
+              <div class="field">
+                <label for="targetBusinessGroup1QuarterOperation">商务一组季度代运营目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup1QuarterOperation" data-target-key="businessGroup1QuarterOperation">
+              </div>
+              <div class="field">
+                <label for="targetBusinessGroup1QuarterRecharge">商务一组季度代充值目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup1QuarterRecharge" data-target-key="businessGroup1QuarterRecharge">
+              </div>
+
+              <div class="target-form-heading">商务一组月度目标</div>
+              <div class="field">
+                <label for="targetBusinessGroup1MonthTotal">商务一组月度总目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup1MonthTotal" data-target-key="businessGroup1MonthTotal">
+              </div>
+              <div class="field">
+                <label for="targetBusinessGroup1MonthOperation">商务一组月度代运营目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup1MonthOperation" data-target-key="businessGroup1MonthOperation">
+              </div>
+              <div class="field">
+                <label for="targetBusinessGroup1MonthRecharge">商务一组月度代充值目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup1MonthRecharge" data-target-key="businessGroup1MonthRecharge">
+              </div>
+
+              <div class="target-form-heading">商务二组季度目标</div>
+              <div class="field">
+                <label for="targetBusinessGroup2QuarterTotal">商务二组季度总目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup2QuarterTotal" data-target-key="businessGroup2QuarterTotal">
+              </div>
+              <div class="field">
+                <label for="targetBusinessGroup2QuarterOperation">商务二组季度代运营目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup2QuarterOperation" data-target-key="businessGroup2QuarterOperation">
+              </div>
+              <div class="field">
+                <label for="targetBusinessGroup2QuarterRecharge">商务二组季度代充值目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup2QuarterRecharge" data-target-key="businessGroup2QuarterRecharge">
+              </div>
+
+              <div class="target-form-heading">商务二组月度目标</div>
+              <div class="field">
+                <label for="targetBusinessGroup2MonthTotal">商务二组月度总目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup2MonthTotal" data-target-key="businessGroup2MonthTotal">
+              </div>
+              <div class="field">
+                <label for="targetBusinessGroup2MonthOperation">商务二组月度代运营目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup2MonthOperation" data-target-key="businessGroup2MonthOperation">
+              </div>
+              <div class="field">
+                <label for="targetBusinessGroup2MonthRecharge">商务二组月度代充值目标</label>
+                <input type="number" min="0" step="0.01" id="targetBusinessGroup2MonthRecharge" data-target-key="businessGroup2MonthRecharge">
+              </div>
+            </div>
+            <div class="target-form-actions">
+              <button class="btn" type="button" id="clearTargetsBtn">清空目标</button>
+              <button class="btn primary" type="button" id="saveTargetsBtn">保存目标</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="./xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase-config.js"></script>
+  <script src="./consumption-detail-data.js"></script>
+  <script src="./direct-channel-mapping-data.js"></script>
+  <script>
+    const state = {
+      allRows: [],
+      rows: [],
+      mappingRows: [],
+      mappingMap: new Map(),
+      selectedMonth: "all",
+      selectedStart: "",
+      selectedEnd: "",
+      months: [],
+      targets: {},
+      targetYear: "",
+      targetQuarter: "",
+      targetMonth: "",
+      cloud: {
+        enabled: false,
+        client: null,
+        user: null,
+        role: "",
+        loading: false
+      },
+      db: null,
+      dbReady: false,
+      fileName: "消耗明细"
+    };
+
+    const els = {
+      dataInput: document.getElementById("dataInput"),
+      mappingInput: document.getElementById("mappingInput"),
+      uploadBtn: document.getElementById("uploadBtn"),
+      mappingBtn: document.getElementById("mappingBtn"),
+      reloadDbBtn: document.getElementById("reloadDbBtn"),
+      exportBtn: document.getElementById("exportBtn"),
+      reportPageBtn: document.getElementById("reportPageBtn"),
+      targetPageBtn: document.getElementById("targetPageBtn"),
+      reportView: document.getElementById("reportView"),
+      targetView: document.getElementById("targetView"),
+      dataStatus: document.getElementById("dataStatus"),
+      mappingStatus: document.getElementById("mappingStatus"),
+      dbStatus: document.getElementById("dbStatus"),
+      cloudEmail: document.getElementById("cloudEmail"),
+      cloudPassword: document.getElementById("cloudPassword"),
+      cloudLoginBtn: document.getElementById("cloudLoginBtn"),
+      cloudLogoutBtn: document.getElementById("cloudLogoutBtn"),
+      cloudReloadBtn: document.getElementById("cloudReloadBtn"),
+      cloudStatus: document.getElementById("cloudStatus"),
+      filterStatus: document.getElementById("filterStatus"),
+      monthFilter: document.getElementById("monthFilter"),
+      dateStart: document.getElementById("dateStart"),
+      dateEnd: document.getElementById("dateEnd"),
+      targetYearSelect: document.getElementById("targetYearSelect"),
+      targetQuarterSelect: document.getElementById("targetQuarterSelect"),
+      targetMonthSelect: document.getElementById("targetMonthSelect"),
+      targetInputs: Array.from(document.querySelectorAll("[data-target-key]")),
+      saveTargetsBtn: document.getElementById("saveTargetsBtn"),
+      clearTargetsBtn: document.getElementById("clearTargetsBtn"),
+      targetStatus: document.getElementById("targetStatus"),
+      subtitle: document.getElementById("subtitle"),
+      annualTag: document.getElementById("annualTag"),
+      quarterTag: document.getElementById("quarterTag"),
+      monthTag: document.getElementById("monthTag"),
+      weekTag: document.getElementById("weekTag"),
+      dayTag: document.getElementById("dayTag"),
+      annualCards: document.getElementById("annualCards"),
+      quarterCards: document.getElementById("quarterCards"),
+      monthCards: document.getElementById("monthCards"),
+      weekCards: document.getElementById("weekCards"),
+      dayCards: document.getElementById("dayCards"),
+      quarterTrend: document.getElementById("quarterTrend"),
+      monthTrend: document.getElementById("monthTrend"),
+      dayTrend: document.getElementById("dayTrend"),
+      dayTopOpportunity: document.getElementById("dayTopOpportunity"),
+      dayTopAdvertiser: document.getElementById("dayTopAdvertiser"),
+      newCustomerTag: document.getElementById("newCustomerTag"),
+      newCustomerCards: document.getElementById("newCustomerCards"),
+      newCustomerRanking: document.getElementById("newCustomerRanking"),
+      newCustomerDetail: document.getElementById("newCustomerDetail"),
+      industryYearTable: document.getElementById("industryYearTable"),
+      industryQuarterTable: document.getElementById("industryQuarterTable"),
+      industryMonthTable: document.getElementById("industryMonthTable"),
+      businessGroupCards: document.getElementById("businessGroupCards"),
+      businessMonthRanking: document.getElementById("businessMonthRanking"),
+      businessDayRanking: document.getElementById("businessDayRanking"),
+      operationCards: document.getElementById("operationCards"),
+      operationTrend: document.getElementById("operationTrend"),
+      rechargeCards: document.getElementById("rechargeCards"),
+      rechargeTrend: document.getElementById("rechargeTrend"),
+      countdown: document.getElementById("countdown"),
+      monthProgressBar: document.getElementById("monthProgressBar"),
+      monthProgressText: document.getElementById("monthProgressText"),
+      monthProgressPercent: document.getElementById("monthProgressPercent"),
+      toast: document.getElementById("toast")
+    };
+
+    function normalizeText(value) {
+      return String(value ?? "").trim().replace(/\s+/g, "");
+    }
+
+    function coerce(value) {
+      const clean = String(value).replace(/,/g, "").trim();
+      if (clean !== "" && !Number.isNaN(Number(clean))) return Number(clean);
+      return value;
+    }
+
+    function parseCSV(text) {
+      const rows = [];
+      let row = [], field = "", quoted = false;
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i], next = text[i + 1];
+        if (char === '"' && quoted && next === '"') { field += '"'; i++; }
+        else if (char === '"') quoted = !quoted;
+        else if (char === "," && !quoted) { row.push(field.trim()); field = ""; }
+        else if ((char === "\n" || char === "\r") && !quoted) {
+          if (char === "\r" && next === "\n") i++;
+          row.push(field.trim());
+          if (row.some(Boolean)) rows.push(row);
+          row = [];
+          field = "";
+        } else field += char;
+      }
+      row.push(field.trim());
+      if (row.some(Boolean)) rows.push(row);
+      if (!rows.length) return [];
+      const headers = rows[0].map((h, i) => h || `字段${i + 1}`);
+      return rows.slice(1).map(item => Object.fromEntries(headers.map((h, i) => [h, coerce(item[i] ?? "")])));
+    }
+
+    function isExcelFile(file) {
+      return /\.(xlsx|xls)$/i.test(file.name);
+    }
+
+    function normalizeWorkbookRows(rows) {
+      return rows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, coerce(value)])));
+    }
+
+    async function parseDataFile(file) {
+      if (isExcelFile(file)) {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+        const firstSheet = workbook.SheetNames[0];
+        return normalizeWorkbookRows(XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "", raw: false }));
+      }
+      if (file.name.toLowerCase().endsWith(".json")) {
+        const parsed = JSON.parse(await file.text());
+        return normalizeWorkbookRows(Array.isArray(parsed) ? parsed : parsed.data || []);
+      }
+      return parseCSV(await file.text());
+    }
+
+    function rowDateValue(row) {
+      const value = row["日期"];
+      if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+      const text = String(value ?? "").trim();
+      const match = text.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
+      if (match) return `${match[1]}-${String(Number(match[2])).padStart(2, "0")}-${String(Number(match[3])).padStart(2, "0")}`;
+      const parsed = new Date(text);
+      return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+    }
+
+    function monthFromDate(value) {
+      const date = rowDateValue({ 日期: value });
+      return date ? date.slice(0, 7) : "";
+    }
+
+    function businessGroup(name) {
+      const member = String(name ?? "").trim();
+      if (["程鹏", "陈佳", "樊俊俊", "黄文强"].includes(member)) return "商务一组";
+      if (["吕帅印", "陈梦燕", "胡金正", "尤欢", "于泽"].includes(member)) return "商务二组";
+      return "其他组";
+    }
+
+    function mappingKey(opportunity, advertiser) {
+      return `${normalizeText(opportunity)}||${normalizeText(advertiser)}`;
+    }
+
+    function lookupDirectChannel(row) {
+      const value = state.mappingMap.get(mappingKey(row["商机名称"], row["广告主主体"]));
+      return value ? { matched: true, value } : { matched: false, value: "未匹配" };
+    }
+
+    function enrichRow(row) {
+      const next = { ...row };
+      next["月份"] = next["月份"] || monthFromDate(next["日期"]);
+      next["商务组"] = businessGroup(next["商务"]);
+      const mapped = lookupDirectChannel(next);
+      next["直客or渠道"] = mapped.value;
+      next["匹配状态"] = mapped.matched ? "已匹配" : "未匹配";
+      return next;
+    }
+
+    function findColumn(columns, candidates) {
+      const normalized = new Map(columns.map(col => [normalizeText(col).toLowerCase(), col]));
+      for (const item of candidates) {
+        const hit = normalized.get(normalizeText(item).toLowerCase());
+        if (hit) return hit;
+      }
+      return "";
+    }
+
+    function configureMapping(rows, persist = true) {
+      const validRows = rows.filter(row => row && typeof row === "object");
+      const columns = Array.from(new Set(validRows.flatMap(row => Object.keys(row))));
+      const opportunityCol = findColumn(columns, ["商机名称", "商机"]);
+      const advertiserCol = findColumn(columns, ["广告主主体", "广告主", "客户主体"]);
+      const typeCol = findColumn(columns, ["直客or渠道", "直客/渠道", "直客渠道", "客户类型", "类型", "渠道类型"]);
+      if (!opportunityCol || !advertiserCol || !typeCol) {
+        toast("映射表缺少商机名称、广告主主体或直客/渠道字段");
+        return false;
+      }
+      const map = new Map();
+      for (const row of validRows) {
+        const key = mappingKey(row[opportunityCol], row[advertiserCol]);
+        const value = String(row[typeCol] ?? "").trim();
+        if (key !== "||" && value) map.set(key, value);
+      }
+      state.mappingRows = validRows;
+      state.mappingMap = map;
+      if (persist) localStorage.setItem("dmp.directChannelMapping", JSON.stringify(validRows));
+      state.allRows = state.allRows.map(enrichRow);
+      renderMappingStatus();
+      applyFilters();
+      render();
+      return true;
+    }
+
+    function loadStoredMapping() {
+      const preloaded = window.PRELOADED_DIRECT_CHANNEL_MAPPING?.rows;
+      if (preloaded?.length) {
+        configureMapping(preloaded, false);
+        return;
+      }
+      try {
+        const rows = JSON.parse(localStorage.getItem("dmp.directChannelMapping") || "[]");
+        if (rows.length) configureMapping(rows, false);
+      } catch {}
+      renderMappingStatus();
+    }
+
+    function setRows(rows, fileName) {
+      state.allRows = rows.filter(row => row && typeof row === "object").map(enrichRow);
+      state.fileName = fileName;
+      state.months = Array.from(new Set(state.allRows.map(row => row["月份"]).filter(Boolean))).sort();
+      state.selectedMonth = "all";
+      state.selectedStart = "";
+      state.selectedEnd = "";
+      configureFilters();
+      applyFilters();
+      render();
+      toast(`${fileName} 已载入，共 ${state.allRows.length} 行`);
+    }
+
+    function configureFilters() {
+      els.monthFilter.innerHTML = [`<option value="all">全部月份</option>`, ...state.months.map(month => `<option value="${escapeHtml(month)}">${escapeHtml(month)}</option>`)].join("");
+      els.monthFilter.value = state.selectedMonth;
+      const dates = state.allRows.map(rowDateValue).filter(Boolean).sort();
+      els.dateStart.min = dates[0] || "";
+      els.dateStart.max = dates[dates.length - 1] || "";
+      els.dateEnd.min = dates[0] || "";
+      els.dateEnd.max = dates[dates.length - 1] || "";
+      els.dateStart.value = state.selectedStart;
+      els.dateEnd.value = state.selectedEnd;
+      configureTargetPeriodOptions();
+    }
+
+    function applyFilters() {
+      state.rows = state.allRows.filter(row => {
+        const date = rowDateValue(row);
+        if (state.selectedMonth !== "all" && row["月份"] !== state.selectedMonth) return false;
+        if (state.selectedStart && date && date < state.selectedStart) return false;
+        if (state.selectedEnd && date && date > state.selectedEnd) return false;
+        return true;
+      });
+    }
+
+    function loadTargets() {
+      try {
+        const stored = JSON.parse(localStorage.getItem("dmp.targets") || "{}");
+        state.targets = sanitizeTargets(stored && typeof stored === "object" ? stored : {});
+      } catch {
+        state.targets = {};
+      }
+      configureTargetPeriodOptions();
+      fillTargetForm();
+      renderTargetStatus();
+    }
+
+    function activeTargetKeys() {
+      return els.targetInputs.map(input => input.dataset.targetKey);
+    }
+
+    function sanitizeTargets(targets) {
+      const allowed = new Set(activeTargetKeys());
+      const migrated = { ...targets };
+      const legacyMap = {
+        businessGroup1OperationMonth: "businessGroup1MonthOperation",
+        businessGroup1RechargeMonth: "businessGroup1MonthRecharge",
+        businessGroup2OperationMonth: "businessGroup2MonthOperation",
+        businessGroup2RechargeMonth: "businessGroup2MonthRecharge"
+      };
+      for (const [legacyKey, nextKey] of Object.entries(legacyMap)) {
+        if (!migrated[nextKey] && migrated[legacyKey]) migrated[nextKey] = migrated[legacyKey];
+        delete migrated[legacyKey];
+      }
+      return Object.fromEntries(Object.entries(migrated).filter(([key]) => allowed.has(key)));
+    }
+
+    function configureTargetPeriodOptions() {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const dataYears = state.months.map(month => Number(month.slice(0, 4))).filter(Number.isFinite);
+      const minYear = Math.min(2020, currentYear - 3, ...dataYears);
+      const maxYear = Math.max(2035, currentYear + 3, ...dataYears);
+      const years = [];
+      for (let year = minYear; year <= maxYear; year++) years.push(String(year));
+      const quarters = years.flatMap(year => [1, 2, 3, 4].map(quarter => `${year}Q${quarter}`));
+      const ref = state.rows.length || state.allRows.length ? reportDate() : formatDate(now);
+      const defaultYear = ref.slice(0, 4);
+      const defaultQuarter = quarterBounds(ref).label;
+      const defaultMonth = ref.slice(0, 7);
+      setSelectOptions(els.targetYearSelect, years, state.targetYear || defaultYear);
+      setSelectOptions(els.targetQuarterSelect, quarters, state.targetQuarter || defaultQuarter);
+      const quarterMonths = monthsForQuarter(els.targetQuarterSelect.value);
+      setSelectOptions(els.targetMonthSelect, quarterMonths, state.targetMonth || defaultMonth);
+      state.targetYear = els.targetYearSelect.value;
+      state.targetQuarter = els.targetQuarterSelect.value;
+      state.targetMonth = els.targetMonthSelect.value;
+    }
+
+    function monthsForQuarter(quarterLabel) {
+      const match = String(quarterLabel || "").match(/^(\d{4})Q([1-4])$/);
+      if (!match) return [];
+      const year = match[1];
+      const quarter = Number(match[2]);
+      const startMonth = (quarter - 1) * 3 + 1;
+      return [0, 1, 2].map(offset => `${year}-${String(startMonth + offset).padStart(2, "0")}`);
+    }
+
+    function syncTargetMonthToQuarter(preferredMonth = state.targetMonth) {
+      const quarterMonths = monthsForQuarter(els.targetQuarterSelect.value);
+      setSelectOptions(els.targetMonthSelect, quarterMonths, preferredMonth);
+      state.targetQuarter = els.targetQuarterSelect.value;
+      state.targetMonth = els.targetMonthSelect.value;
+    }
+
+    function setSelectOptions(select, values, selected) {
+      const normalized = values.includes(selected) ? selected : values[0] || "";
+      select.innerHTML = values.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
+      select.value = normalized;
+    }
+
+    function fillTargetForm() {
+      els.targetInputs.forEach(input => {
+        const value = targetValue(input.dataset.targetKey, selectedTargetPeriod(input.dataset.targetKey));
+        input.value = value ? String(value) : "";
+      });
+    }
+
+    function selectedTargetPeriod(key) {
+      if (key.startsWith("annual")) return state.targetYear || els.targetYearSelect.value;
+      if (key.startsWith("quarter") || key.includes("Quarter")) return state.targetQuarter || els.targetQuarterSelect.value;
+      return state.targetMonth || els.targetMonthSelect.value;
+    }
+
+    function targetValue(key, periodKey) {
+      const bucket = state.targets[key];
+      if (bucket && typeof bucket === "object" && !Array.isArray(bucket)) {
+        const value = Number(bucket[periodKey]);
+        return Number.isFinite(value) && value > 0 ? value : null;
+      }
+      const legacyValue = Number(bucket);
+      return Number.isFinite(legacyValue) && legacyValue > 0 ? legacyValue : null;
+    }
+
+    async function saveTargetsFromForm() {
+      const targets = sanitizeTargets(state.targets);
+      els.targetInputs.forEach(input => {
+        const key = input.dataset.targetKey;
+        const periodKey = selectedTargetPeriod(key);
+        const value = Number(String(input.value).replace(/,/g, ""));
+        const bucket = targets[key] && typeof targets[key] === "object" && !Array.isArray(targets[key]) ? { ...targets[key] } : {};
+        if (Number.isFinite(value) && value > 0) bucket[periodKey] = value;
+        else delete bucket[periodKey];
+        if (Object.keys(bucket).length) targets[key] = bucket;
+        else delete targets[key];
+      });
+      state.targets = targets;
+      localStorage.setItem("dmp.targets", JSON.stringify(targets));
+      if (state.cloud.enabled && state.cloud.user) {
+        if (!canCloudEdit()) {
+          toast("当前账号没有目标填报权限");
+          return;
+        }
+        await syncCloudTargets();
+      }
+      renderTargetStatus();
+      render();
+      toast("目标已保存并应用到报表");
+    }
+
+    function clearTargets() {
+      state.targets = {};
+      localStorage.removeItem("dmp.targets");
+      fillTargetForm();
+      renderTargetStatus();
+      render();
+      toast("目标已清空");
+    }
+
+    function renderTargetStatus() {
+      const count = Object.values(sanitizeTargets(state.targets)).reduce((sum, value) => {
+        if (value && typeof value === "object" && !Array.isArray(value)) return sum + Object.values(value).filter(item => Number(item) > 0).length;
+        return sum + (Number(value) > 0 ? 1 : 0);
+      }, 0);
+      els.targetStatus.textContent = count ? `目标：已保存 ${count} 项 · 本地推口径` : "目标：未填报 · 本地推口径";
+    }
+
+    function showPage(page) {
+      const isTarget = page === "target";
+      els.reportView.classList.toggle("is-hidden", isTarget);
+      els.targetView.classList.toggle("is-hidden", !isTarget);
+      els.reportPageBtn.classList.toggle("active", !isTarget);
+      els.targetPageBtn.classList.toggle("active", isTarget);
+      els.reportPageBtn.classList.toggle("primary", !isTarget);
+      els.targetPageBtn.classList.toggle("primary", isTarget);
+      if (isTarget) {
+        configureTargetPeriodOptions();
+        fillTargetForm();
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function setCardTarget(cards, label, key, periodKey) {
+      const card = cards.find(item => item.label === label);
+      const target = targetValue(key, periodKey);
+      if (card && target) card.target = target;
+    }
+
+    function applyPeriodTargets(cards, periodType, bounds) {
+      if (periodType === "quarter") {
+        setCardTarget(cards, "本地推消耗", "quarterTotal", bounds.label);
+        setCardTarget(cards, "本地推代运营消耗", "quarterOperation", bounds.label);
+        setCardTarget(cards, "本地推代充值消耗", "quarterRecharge", bounds.label);
+      }
+      if (periodType === "month") {
+        setCardTarget(cards, "本地推消耗", "monthTotal", bounds.label);
+        setCardTarget(cards, "本地推代运营消耗", "monthOperation", bounds.label);
+        setCardTarget(cards, "本地推代充值消耗", "monthRecharge", bounds.label);
+      }
+    }
+
+    function currentFilterLabel() {
+      const parts = [state.selectedMonth === "all" ? "全部月份" : state.selectedMonth];
+      if (state.selectedStart || state.selectedEnd) parts.push(`${state.selectedStart || "最早"} 至 ${state.selectedEnd || "最新"}`);
+      return parts.join(" · ");
+    }
+
+    function dateFromString(date) {
+      return new Date(`${date}T00:00:00`);
+    }
+
+    function formatDate(date) {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    }
+
+    function latestDate(rows) {
+      const dates = rows.map(rowDateValue).filter(Boolean).sort();
+      return dates[dates.length - 1] || "";
+    }
+
+    function actualYesterday() {
+      const now = new Date();
+      return formatDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+    }
+
+    function reportDate() {
+      const yesterday = actualYesterday();
+      if (state.rows.some(row => rowDateValue(row) === yesterday)) return yesterday;
+      return latestDate(state.rows) || latestDate(state.allRows) || yesterday;
+    }
+
+    function periodRows(start, end, rows = state.rows) {
+      return rows.filter(row => {
+        const date = rowDateValue(row);
+        return date && date >= start && date <= end;
+      });
+    }
+
+    function addDays(dateValue, days) {
+      const date = dateFromString(dateValue);
+      date.setDate(date.getDate() + days);
+      return formatDate(date);
+    }
+
+    function elapsedDays(start, end) {
+      const s = dateFromString(start);
+      const e = dateFromString(end);
+      return Math.round((e - s) / 86400000) + 1;
+    }
+
+    function previousComparableBounds(bounds, periodType) {
+      const start = dateFromString(bounds.start);
+      if (periodType === "year") {
+        const year = start.getFullYear() - 1;
+        return { start: `${year}-01-01`, end: `${year}-12-31`, label: `${year}年` };
+      }
+      if (periodType === "month") {
+        return monthBounds(formatDate(new Date(start.getFullYear(), start.getMonth() - 1, 1)));
+      }
+      if (periodType === "quarter") {
+        return quarterBounds(formatDate(new Date(start.getFullYear(), start.getMonth() - 3, 1)));
+      }
+      if (periodType === "week") {
+        return {
+          start: addDays(bounds.start, -7),
+          end: addDays(bounds.end, -7),
+          label: "上周"
+        };
+      }
+      return {
+        start: addDays(bounds.start, -1),
+        end: addDays(bounds.end, -1),
+        label: "前日"
+      };
+    }
+
+    function monthBounds(dateValue) {
+      const date = dateFromString(dateValue);
+      const start = new Date(date.getFullYear(), date.getMonth(), 1);
+      const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+      return { start: formatDate(start), end: formatDate(end), label: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}` };
+    }
+
+    function quarterBounds(dateValue) {
+      const date = dateFromString(dateValue);
+      const quarter = Math.floor(date.getMonth() / 3) + 1;
+      const start = new Date(date.getFullYear(), (quarter - 1) * 3, 1);
+      const end = new Date(date.getFullYear(), quarter * 3, 0);
+      return { start: formatDate(start), end: formatDate(end), label: `${date.getFullYear()}Q${quarter}` };
+    }
+
+    function yearBounds(dateValue) {
+      const year = dateValue.slice(0, 4);
+      return { start: `${year}-01-01`, end: `${year}-12-31`, label: `${year}年` };
+    }
+
+    function weekBounds(dateValue) {
+      const date = dateFromString(dateValue);
+      const day = date.getDay() || 7;
+      const start = new Date(date);
+      start.setDate(date.getDate() - day + 1);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      return { start: formatDate(start), end: formatDate(end), label: `${formatDate(start)} 至 ${formatDate(end)}` };
+    }
+
+    function isLocalPush(row) {
+      return String(row["媒体端口"] ?? "").includes("本地推");
+    }
+
+    function isAd(row) {
+      return String(row["媒体端口"] ?? "").toUpperCase().includes("AD");
+    }
+
+    function isOperation(row) {
+      return row["合作模式-DOSS"] === "代运营";
+    }
+
+    function isRecharge(row) {
+      return row["合作模式-DOSS"] === "代充值";
+    }
+
+    function isLocalOperation(row) {
+      return isLocalPush(row) && isOperation(row);
+    }
+
+    function isLocalRecharge(row) {
+      return isLocalPush(row) && isRecharge(row);
+    }
+
+    function nonGrantSpend(row) {
+      const value = Number(row["非赠款消耗"]);
+      return Number.isFinite(value) ? value : 0;
+    }
+
+    function sumNonGrant(rows, predicate = () => true) {
+      return rows.reduce((sum, row) => predicate(row) ? sum + nonGrantSpend(row) : sum, 0);
+    }
+
+    function periodMetrics(currentRows, previousRows) {
+      const current = {
+        total: sumNonGrant(currentRows),
+        local: sumNonGrant(currentRows, isLocalPush),
+        ad: sumNonGrant(currentRows, isAd),
+        operation: sumNonGrant(currentRows, isLocalOperation),
+        recharge: sumNonGrant(currentRows, isLocalRecharge)
+      };
+      const previous = {
+        total: sumNonGrant(previousRows),
+        local: sumNonGrant(previousRows, isLocalPush),
+        ad: sumNonGrant(previousRows, isAd),
+        operation: sumNonGrant(previousRows, isLocalOperation),
+        recharge: sumNonGrant(previousRows, isLocalRecharge)
+      };
+      return [
+        { label: "总消耗", value: current.total, delta: ratio(current.total, previous.total) },
+        { label: "本地推消耗", value: current.local, delta: ratio(current.local, previous.local) },
+        { label: "AD消耗", value: current.ad, delta: ratio(current.ad, previous.ad) },
+        { label: "本地推代运营消耗", value: current.operation, delta: ratio(current.operation, previous.operation) },
+        { label: "本地推代充值消耗", value: current.recharge, delta: ratio(current.recharge, previous.recharge) }
+      ];
+    }
+
+    function averageDaily(rows, start, end, predicate = () => true) {
+      const days = Math.max(1, elapsedDays(start, end));
+      return sumNonGrant(rows, predicate) / days;
+    }
+
+    function localAverageDailyCard(bounds, currentEnd, previousRows) {
+      const currentRows = periodRows(bounds.start, currentEnd);
+      const previousBounds = previousComparableBounds(bounds, "month");
+      const previousFullRows = periodRows(previousBounds.start, previousBounds.end);
+      const currentValue = averageDaily(currentRows, bounds.start, currentEnd, isLocalPush);
+      const previousValue = averageDaily(previousFullRows, previousBounds.start, previousBounds.end, isLocalPush);
+      return { label: "本地推平均日耗", value: currentValue, delta: ratio(currentValue, previousValue), compareLabel: "较上月整月日均" };
+    }
+
+    function ratio(current, previous) {
+      if (!previous) return null;
+      return (current - previous) / previous;
+    }
+
+    function renderPeriod(sectionCards, tag, bounds, compareLabel, endDate, periodType) {
+      const currentEnd = endDate && endDate < bounds.end ? endDate : bounds.end;
+      const currentRows = periodRows(bounds.start, currentEnd);
+      const previousBounds = previousComparableBounds(bounds, periodType);
+      const previousEnd = addDays(previousBounds.start, elapsedDays(bounds.start, currentEnd) - 1);
+      const previous = {
+        start: previousBounds.start,
+        end: previousEnd < previousBounds.end ? previousEnd : previousBounds.end
+      };
+      const previousRows = periodRows(previous.start, previous.end);
+      tag.textContent = `${bounds.label} · 截至 ${currentEnd} · 对比 ${previous.start} 至 ${previous.end}`;
+      const cards = periodMetrics(currentRows, previousRows);
+      applyPeriodTargets(cards, periodType, bounds);
+      if (periodType === "month") {
+        cards.push(localAverageDailyCard(bounds, currentEnd, previousRows));
+      }
+      sectionCards.innerHTML = cards.map(card => renderCard(card, card.compareLabel || compareLabel)).join("");
+    }
+
+    function renderAnnual(bounds, endDate) {
+      const currentEnd = endDate && endDate < bounds.end ? endDate : bounds.end;
+      const rows = periodRows(bounds.start, currentEnd);
+      els.annualTag.textContent = `${bounds.label} · 截至 ${currentEnd}`;
+      const cards = [
+        { label: "总消耗", value: sumNonGrant(rows) },
+        { label: "本地推消耗", value: sumNonGrant(rows, isLocalPush), target: targetValue("annualTotal", bounds.start.slice(0, 4)) },
+        { label: "AD消耗", value: sumNonGrant(rows, isAd) },
+        { label: "本地推代运营消耗", value: sumNonGrant(rows, isLocalOperation), target: targetValue("annualOperation", bounds.start.slice(0, 4)) },
+        { label: "本地推代充值消耗", value: sumNonGrant(rows, isLocalRecharge), target: targetValue("annualRecharge", bounds.start.slice(0, 4)) }
+      ];
+      els.annualCards.innerHTML = cards.map(card => renderCard(card)).join("");
+    }
+
+    function renderCard(card, compareLabel = "") {
+      const delta = formatDelta(card.delta);
+      const target = card.target ? `<small class="target-line ${card.value >= card.target ? "target-ok" : "target-warn"}">目标 ${formatCurrency(card.target)} · 达成率 ${formatPercent(card.value / card.target)}</small>` : "";
+      return `<div class="card"><span>${escapeHtml(card.label)}</span><strong>${formatCurrency(card.value)}</strong>${target}${delta ? `<small class="${delta.className}">${escapeHtml(compareLabel)}${delta.text}</small>` : ""}</div>`;
+    }
+
+    function dailySeries(rows, start, end, predicate = () => true) {
+      const map = new Map();
+      for (const row of rows) {
+        const date = rowDateValue(row);
+        if (!date || date < start || date > end || !predicate(row)) continue;
+        map.set(date, (map.get(date) || 0) + nonGrantSpend(row));
+      }
+      const series = [];
+      for (let date = start; date <= end; date = addDays(date, 1)) {
+        series.push({ date, value: map.get(date) || 0 });
+      }
+      return series;
+    }
+
+    function multiGroupDailySeries(rows, start, end, mode) {
+      const groups = ["商务一组", "商务二组", "其他组"];
+      return groups.map(group => ({
+        name: group,
+        data: dailySeries(rows, start, end, row => isLocalPush(row) && row["合作模式-DOSS"] === mode && row["商务组"] === group)
+      }));
+    }
+
+    function renderLineChart(container, seriesList, options = {}) {
+      const width = 900;
+      const height = 300;
+      const pad = { top: 40, right: 24, bottom: 48, left: 70 };
+      const colors = ["#16776d", "#345a8a", "#b65345", "#8a6f2c"];
+      const allPoints = seriesList.flatMap(series => series.data);
+      const max = Math.max(...allPoints.map(point => point.value), 1);
+      const labels = seriesList[0]?.data.map(point => point.date) || [];
+      const xStep = labels.length > 1 ? (width - pad.left - pad.right) / (labels.length - 1) : 0;
+      const y = value => height - pad.bottom - (height - pad.top - pad.bottom) * (value / max);
+      const x = index => pad.left + index * xStep;
+      const grid = [0, .25, .5, .75, 1].map(t => {
+        const gy = height - pad.bottom - (height - pad.top - pad.bottom) * t;
+        return `<line x1="${pad.left}" y1="${gy}" x2="${width - pad.right}" y2="${gy}" stroke="#edf1f4"/><text x="12" y="${gy + 4}" font-size="11" fill="#66727f">${formatCurrency(max * t)}</text>`;
+      }).join("");
+      const lines = seriesList.map((series, sIndex) => {
+        const points = series.data.map((point, index) => `${x(index)},${y(point.value)}`).join(" ");
+        const circles = series.data.map((point, index) => {
+          const cx = x(index);
+          const cy = y(point.value);
+          return `<circle cx="${cx}" cy="${cy}" r="4" fill="#fff" stroke="${colors[sIndex % colors.length]}" stroke-width="2"><title>${series.name} ${point.date}: ${formatCurrency(point.value)}</title></circle>`;
+        }).join("");
+        return `<polyline points="${points}" fill="none" stroke="${colors[sIndex % colors.length]}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${circles}`;
+      }).join("");
+      const dataLabels = seriesList.map((series, sIndex) => {
+        const offset = seriesList.length === 1 ? -10 : -10 - (sIndex % 3) * 13;
+        return series.data.map((point, index) => {
+          if (!point.value) return "";
+          const labelY = Math.max(12, y(point.value) + offset);
+          return `<text x="${x(index)}" y="${labelY}" text-anchor="middle" font-size="10" font-weight="700" fill="${colors[sIndex % colors.length]}" paint-order="stroke" stroke="#fff" stroke-width="3" stroke-linejoin="round">${formatCurrency(point.value)}</text>`;
+        }).join("");
+      }).join("");
+      const bandWidth = labels.length > 1 ? xStep : (width - pad.left - pad.right);
+      const hoverBands = labels.map((label, index) => {
+        const tooltip = [
+          label,
+          ...seriesList.map(series => {
+            const point = series.data[index] || { value: 0 };
+            return `${series.name}: ${formatCurrency(point.value)}`;
+          })
+        ].join("\n");
+        const bx = Math.max(pad.left, x(index) - bandWidth / 2);
+        const bw = index === 0 || index === labels.length - 1 ? bandWidth / 2 : bandWidth;
+        return `<rect x="${bx}" y="${pad.top}" width="${bw}" height="${height - pad.top - pad.bottom}" fill="transparent"><title>${escapeHtml(tooltip)}</title></rect>`;
+      }).join("");
+      const tickEvery = Math.max(1, Math.ceil(labels.length / 8));
+      const ticks = labels.map((label, index) => index % tickEvery === 0 || index === labels.length - 1
+        ? `<text x="${x(index)}" y="${height - 18}" text-anchor="middle" font-size="11" fill="#66727f">${label.slice(5)}</text>`
+        : "").join("");
+      const legend = `<div class="legend">${seriesList.map((series, index) => `<span><i style="background:${colors[index % colors.length]}"></i>${escapeHtml(series.name)}</span>`).join("")}</div>`;
+      container.innerHTML = `<svg class="trend-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(options.title || "趋势图")}">${grid}${lines}${dataLabels}${hoverBands}${ticks}</svg>${legend}`;
+    }
+
+    const JAN_2026_NEW_CUSTOMERS = [
+      "北京楠社科技有限公司",
+      "东莞市屠夫鸟文化传媒有限公司",
+      "上海洁鲸智能科技有限公司",
+      "西安学而雅教育咨询有限公司",
+      "北京芋芋文化传媒有限公司",
+      "武汉爱舍予家具销售有限公司",
+      "武汉市武昌区力唯形象设计艺术职业培训学校",
+      "武汉酷漫文化传播有限公司",
+      "南通睿联博创网络科技有限公司",
+      "西安欢朋之旅国际旅行社有限公司未央分公司",
+      "重庆兰马网络科技有限公司",
+      "珠海重明鸟网络科技有限公司",
+      "西安好客国际旅行社有限公司",
+      "合肥飞涛洗衣有限公司",
+      "杭州斯创网络科技有限公司",
+      "合肥前程锦秋留学咨询有限公司",
+      "望山文化传媒（山东）有限公司",
+      "广州创鸣科技有限公司",
+      "青岛星程旅游开发有限公司",
+      "杭州秉烛信息技术有限公司",
+      "徐州考仕通信息咨询有限公司",
+      "绍兴越之梦汽车销售有限公司",
+      "上海途行信息科技有限公司",
+      "杭州激流大任餐饮管理有限公司",
+      "西安抖范科技有限公司",
+      "苏州帕力美智能家居有限公司"
+    ];
+
+    function customerSubject(row) {
+      return String(row["商机主体"] || row["商机名称"] || "").trim();
+    }
+
+    function customerSubjectKey(rowOrValue) {
+      const value = typeof rowOrValue === "object" ? customerSubject(rowOrValue) : rowOrValue;
+      return normalizeText(value);
+    }
+
+    function subjectRepresentatives(rows) {
+      const map = new Map();
+      for (const row of rows) {
+        const subject = customerSubject(row);
+        const key = customerSubjectKey(subject);
+        if (!key) continue;
+        if (!map.has(key)) map.set(key, { subject, groupSpend: new Map(), businessSpend: new Map() });
+        const item = map.get(key);
+        const spend = Math.max(nonGrantSpend(row), 1);
+        item.groupSpend.set(row["商务组"] || "其他组", (item.groupSpend.get(row["商务组"] || "其他组") || 0) + spend);
+        item.businessSpend.set(row["商务"] || "未填商务", (item.businessSpend.get(row["商务"] || "未填商务") || 0) + spend);
+      }
+      return map;
+    }
+
+    function topMapKey(map, fallback) {
+      let winner = fallback;
+      let max = -1;
+      for (const [key, value] of map.entries()) {
+        if (value > max) {
+          winner = key;
+          max = value;
+        }
+      }
+      return winner;
+    }
+
+    function newCustomerItems(month, currentEnd) {
+      const currentRows = periodRows(month.start, currentEnd, state.allRows);
+      const currentReps = subjectRepresentatives(currentRows);
+      let newKeys;
+      if (month.label === "2026-01") {
+        newKeys = new Set(JAN_2026_NEW_CUSTOMERS.map(customerSubjectKey));
+      } else {
+        const previousRows = state.allRows.filter(row => {
+          const date = rowDateValue(row);
+          return date && date < month.start;
+        });
+        const previousKeys = new Set(previousRows.map(customerSubjectKey).filter(Boolean));
+        newKeys = new Set(Array.from(currentReps.keys()).filter(key => !previousKeys.has(key)));
+      }
+      return Array.from(newKeys).map(key => {
+        const rep = currentReps.get(key);
+        return {
+          subject: rep?.subject || JAN_2026_NEW_CUSTOMERS.find(name => customerSubjectKey(name) === key) || key,
+          group: rep ? topMapKey(rep.groupSpend, "其他组") : "其他组",
+          business: rep ? topMapKey(rep.businessSpend, "未匹配商务") : "未匹配商务"
+        };
+      }).sort((a, b) => a.subject.localeCompare(b.subject, "zh-CN"));
+    }
+
+    function renderNewCustomerModule(month, ref) {
+      const currentEnd = ref && ref < month.end ? ref : month.end;
+      const items = newCustomerItems(month, currentEnd);
+      els.newCustomerTag.textContent = month.label === "2026-01"
+        ? "2026-01 使用指定新开客户名单"
+        : `${month.label} · 对比本月前全部历史`;
+      const cards = [
+        { label: "本月合计新开客户", value: items.length },
+        { label: "商务一组新开客户数", value: items.filter(item => item.group === "商务一组").length },
+        { label: "商务二组新开客户数", value: items.filter(item => item.group === "商务二组").length }
+      ];
+      els.newCustomerCards.innerHTML = cards.map(card => renderNumberCard(card)).join("");
+      const ranking = Array.from(items.reduce((map, item) => {
+        const key = `${item.business}||${item.group}`;
+        if (!map.has(key)) map.set(key, { business: item.business, group: item.group, count: 0 });
+        map.get(key).count += 1;
+        return map;
+      }, new Map()).values()).sort((a, b) => b.count - a.count || a.business.localeCompare(b.business, "zh-CN"));
+      els.newCustomerRanking.innerHTML = ranking.length
+        ? `<table><thead><tr><th>排名</th><th>商务</th><th>商务组</th><th>新开客户数</th></tr></thead><tbody>${ranking.map((row, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(row.business)}</td><td>${escapeHtml(row.group)}</td><td>${formatNumber(row.count)}</td></tr>`).join("")}</tbody></table>`
+        : `<table><thead><tr><th>商务</th></tr></thead><tbody><tr><td>暂无新开客户</td></tr></tbody></table>`;
+      els.newCustomerDetail.innerHTML = items.length
+        ? `<table><thead><tr><th>商机主体</th><th>商务</th><th>商务组</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(item.subject)}</td><td>${escapeHtml(item.business)}</td><td>${escapeHtml(item.group)}</td></tr>`).join("")}</tbody></table>`
+        : `<table><thead><tr><th>商机主体</th></tr></thead><tbody><tr><td>暂无新开客户</td></tr></tbody></table>`;
+    }
+
+    function renderNumberCard(card) {
+      return `<div class="card"><span>${escapeHtml(card.label)}</span><strong>${formatNumber(card.value)}</strong></div>`;
+    }
+
+    function businessGroupTargetKey(group, periodType, mode = "Total") {
+      if (!["商务一组", "商务二组"].includes(group)) return "";
+      const groupKey = group === "商务一组" ? "businessGroup1" : "businessGroup2";
+      const periodKey = periodType === "quarter" ? "Quarter" : "Month";
+      return `${groupKey}${periodKey}${mode}`;
+    }
+
+    function renderBusinessGroups(quarter, month, week, day, endDate) {
+      const periods = [
+        { name: "本季度", bounds: quarter, type: "quarter", compareLabel: "较上季度同期" },
+        { name: "本月", bounds: month, type: "month", compareLabel: "较上月同期" },
+        { name: "本周", bounds: week, type: "week", compareLabel: "较上周同期" },
+        { name: "昨日", bounds: day, type: "day", compareLabel: "较前日" }
+      ];
+      const groups = ["商务一组", "商务二组", "其他组"];
+      const cards = [];
+      for (const period of periods) {
+        const currentEnd = endDate && endDate < period.bounds.end ? endDate : period.bounds.end;
+        const currentRows = periodRows(period.bounds.start, currentEnd).filter(isLocalPush);
+        const previousRows = comparableRows(period.bounds, period.type, currentEnd).filter(isLocalPush);
+        for (const group of groups) {
+          const value = sumNonGrant(currentRows, row => row["商务组"] === group);
+          const previousValue = sumNonGrant(previousRows, row => row["商务组"] === group);
+          const targetKey = ["quarter", "month"].includes(period.type) ? businessGroupTargetKey(group, period.type) : "";
+          cards.push({ label: `${period.name} ${group}`, value, delta: ratio(value, previousValue), compareLabel: period.compareLabel, target: targetKey ? targetValue(targetKey, period.bounds.label) : null });
+        }
+      }
+      els.businessGroupCards.innerHTML = cards.map(card => renderCard(card, card.compareLabel)).join("");
+      const monthEnd = endDate && endDate < month.end ? endDate : month.end;
+      const dayEnd = endDate && endDate < day.end ? endDate : day.end;
+      renderRanking(els.businessMonthRanking, periodRows(month.start, monthEnd).filter(isLocalPush), comparableRows(month, "month", monthEnd).filter(isLocalPush), "本月本地推", "较上月同期");
+      renderRanking(els.businessDayRanking, periodRows(day.start, dayEnd).filter(isLocalPush), comparableRows(day, "day", dayEnd).filter(isLocalPush), "昨日本地推", "较前日");
+    }
+
+    function renderTrendCharts(quarter, month, day, ref) {
+      const quarterEnd = ref && ref < quarter.end ? ref : quarter.end;
+      const monthEnd = ref && ref < month.end ? ref : month.end;
+      const dayStart = addDays(day.start, -29);
+      renderLineChart(els.quarterTrend, [{ name: "本地推", data: dailySeries(state.rows, quarter.start, quarterEnd, isLocalPush) }], { title: "本季度本地推每日消耗趋势" });
+      renderLineChart(els.monthTrend, [{ name: "本地推", data: dailySeries(state.rows, month.start, monthEnd, isLocalPush) }], { title: "本月本地推每日消耗趋势" });
+      renderLineChart(els.dayTrend, [{ name: "本地推", data: dailySeries(state.rows, dayStart, day.end, isLocalPush) }], { title: "近30天本地推每日消耗趋势" });
+    }
+
+    function topSpendBy(rows, field, limit = 20) {
+      const map = new Map();
+      for (const row of rows) {
+        const name = String(row[field] || "未填").trim() || "未填";
+        map.set(name, (map.get(name) || 0) + nonGrantSpend(row));
+      }
+      return Array.from(map.entries())
+        .map(([name, value]) => ({ name, value }))
+        .filter(item => item.value > 0)
+        .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "zh-CN"))
+        .slice(0, limit);
+    }
+
+    function renderBarList(container, data) {
+      if (!data.length) {
+        container.innerHTML = `<div class="side-note" style="color:var(--muted)">暂无本地推消耗数据</div>`;
+        return;
+      }
+      const max = Math.max(...data.map(item => item.value), 1);
+      container.innerHTML = `<div class="bar-list">${data.map((item, index) => {
+        const width = Math.max(2, item.value / max * 100);
+        return `<div class="bar-row" title="${escapeHtml(item.name)}：${formatCurrency(item.value)}">
+          <div class="bar-rank">${index + 1}</div>
+          <div class="bar-body">
+            <div class="bar-meta"><div class="bar-name">${escapeHtml(item.name)}</div></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
+          </div>
+          <div class="bar-value">${formatCurrency(item.value)}</div>
+        </div>`;
+      }).join("")}</div>`;
+    }
+
+    function renderDayTopLists(day) {
+      const rows = periodRows(day.start, day.end).filter(isLocalPush);
+      renderBarList(els.dayTopOpportunity, topSpendBy(rows, "商机名称"));
+      renderBarList(els.dayTopAdvertiser, topSpendBy(rows, "广告主主体"));
+    }
+
+    function renderModeModule(mode, cardContainer, chartContainer, quarter, month, day, ref) {
+      const quarterEnd = ref && ref < quarter.end ? ref : quarter.end;
+      const monthEnd = ref && ref < month.end ? ref : month.end;
+      const currentQuarterRows = periodRows(quarter.start, quarterEnd).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
+      const previousQuarterRows = comparableRows(quarter, "quarter", quarterEnd).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
+      const currentMonthRows = periodRows(month.start, monthEnd).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
+      const previousMonthRows = comparableRows(month, "month", monthEnd).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
+      const currentDayRows = periodRows(day.start, day.end).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
+      const previousDayRows = comparableRows(day, "day", day.end).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
+      const groups = ["商务一组", "商务二组"];
+      const cards = [];
+      const previousBounds = previousComparableBounds(month, "month");
+      const previousFullMonthRows = periodRows(previousBounds.start, previousBounds.end).filter(row => isLocalPush(row) && row["合作模式-DOSS"] === mode);
+      const modeTargetKey = mode === "代运营" ? "monthOperation" : "monthRecharge";
+      const currentMonthTotal = sumNonGrant(currentMonthRows);
+      const previousMonthTotal = sumNonGrant(previousMonthRows);
+      cards.push({
+        label: "当月累计消耗",
+        value: currentMonthTotal,
+        delta: ratio(currentMonthTotal, previousMonthTotal),
+        compareLabel: "较上月同期",
+        target: targetValue(modeTargetKey, month.label)
+      });
+      cards.push({
+        label: "当月本地推日均消耗",
+        value: averageDaily(currentMonthRows, month.start, monthEnd),
+        delta: ratio(averageDaily(currentMonthRows, month.start, monthEnd), averageDaily(previousFullMonthRows, previousBounds.start, previousBounds.end)),
+        compareLabel: "较上月整月日均"
+      });
+      const modeTargetSuffix = mode === "代运营" ? "Operation" : "Recharge";
+      for (const group of groups) {
+        const currentGroupQuarterTotal = sumNonGrant(currentQuarterRows, row => row["商务组"] === group);
+        const previousGroupQuarterTotal = sumNonGrant(previousQuarterRows, row => row["商务组"] === group);
+        const currentGroupMonthTotal = sumNonGrant(currentMonthRows, row => row["商务组"] === group);
+        const previousGroupMonthTotal = sumNonGrant(previousMonthRows, row => row["商务组"] === group);
+        const currentMonthValue = averageDaily(currentMonthRows, month.start, monthEnd, row => row["商务组"] === group);
+        const previousMonthValue = averageDaily(previousFullMonthRows, previousBounds.start, previousBounds.end, row => row["商务组"] === group);
+        const currentDayValue = sumNonGrant(currentDayRows, row => row["商务组"] === group);
+        const previousDayValue = sumNonGrant(previousDayRows, row => row["商务组"] === group);
+        cards.push({
+          label: `${group}当季累计消耗`,
+          value: currentGroupQuarterTotal,
+          delta: ratio(currentGroupQuarterTotal, previousGroupQuarterTotal),
+          compareLabel: "较上季度同期",
+          target: targetValue(businessGroupTargetKey(group, "quarter", modeTargetSuffix), quarter.label)
+        });
+        cards.push({
+          label: `${group}当月累计消耗`,
+          value: currentGroupMonthTotal,
+          delta: ratio(currentGroupMonthTotal, previousGroupMonthTotal),
+          compareLabel: "较上月同期",
+          target: targetValue(businessGroupTargetKey(group, "month", modeTargetSuffix), month.label)
+        });
+        cards.push({ label: `${group}当月平均日耗`, value: currentMonthValue, delta: ratio(currentMonthValue, previousMonthValue), compareLabel: "较上月整月日均" });
+        cards.push({ label: `${group}日度消耗`, value: currentDayValue, delta: ratio(currentDayValue, previousDayValue) });
+      }
+      cardContainer.innerHTML = cards.map(card => renderCard(card, card.compareLabel || (card.label.includes("日度") ? "较前日" : "较上月同期"))).join("");
+      renderLineChart(chartContainer, multiGroupDailySeries(state.rows, month.start, monthEnd, mode), { title: `${mode}三组日耗趋势` });
+    }
+
+    function comparableRows(bounds, periodType, endDate) {
+      const currentEnd = endDate && endDate < bounds.end ? endDate : bounds.end;
+      const previousBounds = previousComparableBounds(bounds, periodType);
+      const previousEnd = addDays(previousBounds.start, elapsedDays(bounds.start, currentEnd) - 1);
+      const previous = {
+        start: previousBounds.start,
+        end: previousEnd < previousBounds.end ? previousEnd : previousBounds.end
+      };
+      return periodRows(previous.start, previous.end);
+    }
+
+    function spendByBusiness(rows) {
+      const map = new Map();
+      for (const row of rows) {
+        const name = String(row["商务"] ?? "未填商务");
+        map.set(name, (map.get(name) || 0) + nonGrantSpend(row));
+      }
+      return map;
+    }
+
+    function renderRanking(container, rows, previousRows, title, compareLabel) {
+      const currentMap = spendByBusiness(rows);
+      const previousMap = spendByBusiness(previousRows);
+      const data = Array.from(currentMap.entries()).map(([name, value]) => ({
+        商务: name,
+        消耗: value,
+        环比: ratio(value, previousMap.get(name) || 0)
+      })).sort((a, b) => b.消耗 - a.消耗);
+      if (!data.length) {
+        container.innerHTML = `<table><thead><tr><th>${escapeHtml(title)}</th></tr></thead><tbody><tr><td>暂无数据</td></tr></tbody></table>`;
+        return;
+      }
+      container.innerHTML = `<table><thead><tr><th>排名</th><th>商务</th><th>非赠款消耗</th><th>${escapeHtml(compareLabel)}</th></tr></thead><tbody>${data.map((row, index) => {
+        const delta = formatDelta(row.环比);
+        return `<tr><td>${index + 1}</td><td>${escapeHtml(row.商务)}</td><td>${formatCurrency(row.消耗)}</td><td>${delta ? `<span class="${delta.className}">${delta.text}</span>` : "暂无可比数据"}</td></tr>`;
+      }).join("")}</tbody></table>`;
+    }
+
+    function spendByIndustry(rows) {
+      const map = new Map();
+      for (const row of rows) {
+        const industry = String(row["一级行业"] ?? "未填行业");
+        map.set(industry, (map.get(industry) || 0) + nonGrantSpend(row));
+      }
+      return map;
+    }
+
+    function comparableRowsToDate(bounds, periodType, endDate) {
+      const currentEnd = endDate && endDate < bounds.end ? endDate : bounds.end;
+      const previousBounds = previousComparableBounds(bounds, periodType);
+      const previousEnd = addDays(previousBounds.start, elapsedDays(bounds.start, currentEnd) - 1);
+      return periodRows(previousBounds.start, previousEnd < previousBounds.end ? previousEnd : previousBounds.end);
+    }
+
+    function renderIndustryTable(container, bounds, periodType, endDate, compareLabel) {
+      const currentEnd = endDate && endDate < bounds.end ? endDate : bounds.end;
+      const currentRows = periodRows(bounds.start, currentEnd).filter(isLocalPush);
+      const previousRows = comparableRowsToDate(bounds, periodType, currentEnd).filter(isLocalPush);
+      const currentMap = spendByIndustry(currentRows);
+      const previousMap = spendByIndustry(previousRows);
+      const total = Array.from(currentMap.values()).reduce((sum, value) => sum + value, 0);
+      const data = Array.from(currentMap.entries()).map(([industry, value]) => ({
+        industry,
+        value,
+        share: total ? value / total : 0,
+        delta: ratio(value, previousMap.get(industry) || 0)
+      })).sort((a, b) => b.value - a.value);
+      if (!data.length) {
+        container.innerHTML = `<table class="industry-table"><thead><tr><th>${escapeHtml(bounds.label)}</th></tr></thead><tbody><tr><td>暂无数据</td></tr></tbody></table>`;
+        return;
+      }
+      container.innerHTML = `<table class="industry-table"><thead><tr><th>排名</th><th>一级行业</th><th>消耗金额</th><th>占比</th><th>${escapeHtml(compareLabel)}</th></tr></thead><tbody>${data.map((row, index) => {
+        const delta = formatDelta(row.delta);
+        return `<tr><td>${index + 1}</td><td>${escapeHtml(row.industry)}</td><td>${formatCurrency(row.value)}</td><td>${formatPercent(row.share)}</td><td>${delta ? `<span class="${delta.className}">${delta.text}</span>` : "暂无可比数据"}</td></tr>`;
+      }).join("")}</tbody></table>`;
+    }
+
+    function renderIndustryModule(year, quarter, month, ref) {
+      renderIndustryTable(els.industryYearTable, year, "year", ref, "较上年同期");
+      renderIndustryTable(els.industryQuarterTable, quarter, "quarter", ref, "较上季度同期");
+      renderIndustryTable(els.industryMonthTable, month, "month", ref, "较上月同期");
+    }
+
+    function render() {
+      const ref = reportDate();
+      const year = yearBounds(ref);
+      const quarter = quarterBounds(ref);
+      const month = monthBounds(ref);
+      const week = weekBounds(ref);
+      const day = { start: ref, end: ref, label: ref };
+
+      els.subtitle.textContent = `当前筛选：${currentFilterLabel()} · 报表参考日期：${ref}`;
+      els.filterStatus.textContent = `筛选：${currentFilterLabel()}，当前 ${state.rows.length} 行`;
+      els.dataStatus.textContent = `数据：${state.fileName}，累计 ${state.allRows.length} 行`;
+
+      renderAnnual(year, ref);
+      renderPeriod(els.quarterCards, els.quarterTag, quarter, "较上季度同期", ref, "quarter");
+      renderPeriod(els.monthCards, els.monthTag, month, "较上月同期", ref, "month");
+      renderPeriod(els.weekCards, els.weekTag, week, "较上周同期", ref, "week");
+      renderPeriod(els.dayCards, els.dayTag, day, "较前日", ref, "day");
+      renderDayTopLists(day);
+      renderNewCustomerModule(month, ref);
+      renderIndustryModule(year, quarter, month, ref);
+      renderBusinessGroups(quarter, month, week, day, ref);
+      renderTrendCharts(quarter, month, day, ref);
+      renderModeModule("代运营", els.operationCards, els.operationTrend, quarter, month, day, ref);
+      renderModeModule("代充值", els.rechargeCards, els.rechargeTrend, quarter, month, day, ref);
+    }
+
+    function updateMonthProgress() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const start = new Date(year, month, 1, 0, 0, 0);
+      const end = new Date(year, month + 1, 1, 0, 0, 0);
+      const elapsedFullDays = Math.max(0, now.getDate() - 1);
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const progress = elapsedFullDays / daysInMonth;
+      const remainingMs = Math.max(0, end - now);
+      const days = Math.floor(remainingMs / 86400000);
+      const hours = Math.floor(remainingMs % 86400000 / 3600000);
+      const minutes = Math.floor(remainingMs % 3600000 / 60000);
+      const seconds = Math.floor(remainingMs % 60000 / 1000);
+      els.countdown.textContent = `${days}天${hours}时${minutes}分${seconds}秒`;
+      els.monthProgressBar.style.width = `${Math.min(100, progress * 100)}%`;
+      els.monthProgressText.textContent = `${elapsedFullDays}/${daysInMonth} 天`;
+      els.monthProgressPercent.textContent = `${formatNumber(progress * 100)}%`;
+    }
+
+    function renderMappingStatus() {
+      els.mappingStatus.textContent = state.mappingMap.size ? `映射：已加载 ${formatNumber(state.mappingMap.size)} 条规则` : "映射：未加载";
+    }
+
+    function toast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.add("show");
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => els.toast.classList.remove("show"), 2200);
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+    }
+
+    function formatNumber(value) {
+      return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value || 0);
+    }
+
+    function formatCurrency(value) {
+      const number = Number(value) || 0;
+      if (Math.abs(number) >= 100000000) return `${formatNumber(number / 100000000)}亿`;
+      if (Math.abs(number) >= 10000) return `${formatNumber(number / 10000)}万`;
+      return formatNumber(number);
+    }
+
+    function formatPercent(value) {
+      return new Intl.NumberFormat("zh-CN", { style: "percent", maximumFractionDigits: 2 }).format(value || 0);
+    }
+
+    function formatDelta(value) {
+      if (value === null || value === undefined || !Number.isFinite(value)) return null;
+      if (Math.abs(value) < 0.000001) return { text: "持平", className: "" };
+      return { text: `${value > 0 ? "上升" : "下降"} ${formatPercent(Math.abs(value))}`, className: value > 0 ? "up" : "down" };
+    }
+
+    function openLocalDb() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open("DataManagementPlatformDB", 1);
+        request.onupgradeneeded = event => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains("rows")) db.createObjectStore("rows", { keyPath: "key" });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function rowKey(row) {
+      return [row["日期"], row["账户ID"], row["账户名称"], row["广告主主体"], row["商机名称"], row["端口ID"], row["媒体端口"], row["总消耗"], row["非赠款消耗"], row["赠款消耗"]].map(normalizeText).join("|");
+    }
+
+    function hashString(value) {
+      let hash = 5381;
+      const text = String(value);
+      for (let i = 0; i < text.length; i++) hash = (hash * 33) ^ text.charCodeAt(i);
+      return (hash >>> 0).toString(36);
+    }
+
+    function canCloudEdit() {
+      return ["editor", "admin"].includes(state.cloud.role);
+    }
+
+    function updateCloudUi() {
+      if (!state.cloud.enabled) {
+        els.cloudStatus.textContent = "云端：未配置，当前为本地模式";
+        return;
+      }
+      const email = state.cloud.user?.email || "";
+      const roleText = state.cloud.role ? `，权限：${state.cloud.role}` : "";
+      els.cloudStatus.textContent = email ? `云端：已登录 ${email}${roleText}` : "云端：未登录";
+      const locked = Boolean(state.cloud.user) && !canCloudEdit();
+      [els.uploadBtn, els.mappingBtn, els.saveTargetsBtn, els.clearTargetsBtn].forEach(button => {
+        button.disabled = locked;
+        button.title = locked ? "当前账号只有查看权限" : "";
+      });
+    }
+
+    async function fetchAllCloudRows(table, columns = "*") {
+      const result = [];
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await state.cloud.client
+          .from(table)
+          .select(columns)
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        result.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+      }
+      return result;
+    }
+
+    function targetsFromCloud(rows) {
+      const targets = {};
+      for (const row of rows || []) {
+        if (!targets[row.target_key]) targets[row.target_key] = {};
+        targets[row.target_key][row.period_key] = Number(row.value);
+      }
+      return targets;
+    }
+
+    function cloudTargetRowsFromState() {
+      return Object.entries(sanitizeTargets(state.targets)).flatMap(([targetKey, bucket]) => {
+        if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) return [];
+        return Object.entries(bucket)
+          .filter(([, value]) => Number(value) > 0)
+          .map(([periodKey, value]) => ({ target_key: targetKey, period_key: periodKey, value: Number(value) }));
+      });
+    }
+
+    async function loadCloudData() {
+      if (!state.cloud.enabled || !state.cloud.user) return;
+      state.cloud.loading = true;
+      els.dbStatus.textContent = "云端：正在读取数据";
+      try {
+        const [targetRows, mappingRows, dataRows] = await Promise.all([
+          fetchAllCloudRows("targets", "target_key,period_key,value"),
+          fetchAllCloudRows("mapping_rows", "payload"),
+          fetchAllCloudRows("consumption_rows", "payload")
+        ]);
+        state.targets = sanitizeTargets(targetsFromCloud(targetRows));
+        localStorage.setItem("dmp.targets", JSON.stringify(state.targets));
+        fillTargetForm();
+        renderTargetStatus();
+        const mappingPayloads = mappingRows.map(item => item.payload).filter(Boolean);
+        if (mappingPayloads.length) configureMapping(mappingPayloads, false);
+        const payloads = dataRows.map(item => item.payload).filter(Boolean);
+        if (payloads.length) {
+          setRows(payloads, "Supabase 云端数据库");
+          els.dbStatus.textContent = `云端：已同步 ${formatNumber(payloads.length)} 行`;
+        } else {
+          els.dbStatus.textContent = "云端：暂无消耗数据";
+        }
+      } catch (error) {
+        els.dbStatus.textContent = "云端：读取失败";
+        toast(`云端读取失败：${error.message || error}`);
+      } finally {
+        state.cloud.loading = false;
+        updateCloudUi();
+      }
+    }
+
+    async function loadCloudRole() {
+      const email = state.cloud.user?.email;
+      if (!email) {
+        state.cloud.role = "";
+        return;
+      }
+      const { data, error } = await state.cloud.client
+        .from("team_members")
+        .select("role")
+        .eq("email", email.toLowerCase())
+        .maybeSingle();
+      if (error) throw error;
+      state.cloud.role = data?.role || "";
+    }
+
+    async function cloudSignIn() {
+      if (!state.cloud.enabled) {
+        toast("云端未配置");
+        return;
+      }
+      const email = els.cloudEmail.value.trim();
+      const password = els.cloudPassword.value;
+      if (!email || !password) {
+        toast("请输入邮箱和密码");
+        return;
+      }
+      const { data, error } = await state.cloud.client.auth.signInWithPassword({ email, password });
+      if (error) {
+        toast(`登录失败：${error.message}`);
+        return;
+      }
+      state.cloud.user = data.user;
+      await loadCloudRole();
+      updateCloudUi();
+      await loadCloudData();
+      toast("已登录云端");
+    }
+
+    async function cloudSignOut() {
+      if (!state.cloud.enabled) return;
+      await state.cloud.client.auth.signOut();
+      state.cloud.user = null;
+      state.cloud.role = "";
+      updateCloudUi();
+      toast("已退出云端");
+    }
+
+    async function initCloud() {
+      const config = window.SUPABASE_CONFIG;
+      if (!window.supabase || !config?.url || !config?.anonKey) {
+        updateCloudUi();
+        return;
+      }
+      state.cloud.enabled = true;
+      state.cloud.client = window.supabase.createClient(config.url, config.anonKey);
+      updateCloudUi();
+      const { data } = await state.cloud.client.auth.getSession();
+      if (data?.session?.user) {
+        state.cloud.user = data.session.user;
+        try {
+          await loadCloudRole();
+          updateCloudUi();
+          await loadCloudData();
+        } catch (error) {
+          toast(`云端初始化失败：${error.message || error}`);
+          updateCloudUi();
+        }
+      }
+      state.cloud.client.auth.onAuthStateChange(async (_event, session) => {
+        state.cloud.user = session?.user || null;
+        if (state.cloud.user) {
+          try {
+            await loadCloudRole();
+            await loadCloudData();
+          } catch (error) {
+            toast(`云端同步失败：${error.message || error}`);
+          }
+        } else {
+          state.cloud.role = "";
+        }
+        updateCloudUi();
+      });
+    }
+
+    async function upsertCloudConsumption(rows) {
+      if (!state.cloud.enabled || !canCloudEdit()) return false;
+      const batchSize = 500;
+      for (let i = 0; i < rows.length; i += batchSize) {
+        const payload = rows.slice(i, i + batchSize).map(row => ({
+          row_key: rowKey(row),
+          row_date: rowDateValue(row) || null,
+          month: row["月份"] || monthFromDate(row["日期"]) || null,
+          payload: row
+        }));
+        const { error } = await state.cloud.client
+          .from("consumption_rows")
+          .upsert(payload, { onConflict: "row_key" });
+        if (error) throw error;
+      }
+      return true;
+    }
+
+    async function upsertCloudMapping(rows) {
+      if (!state.cloud.enabled || !canCloudEdit()) return false;
+      const batchSize = 500;
+      for (let i = 0; i < rows.length; i += batchSize) {
+        const payload = rows.slice(i, i + batchSize).map(row => ({
+          row_key: hashString(JSON.stringify(row)),
+          payload: row
+        }));
+        const { error } = await state.cloud.client
+          .from("mapping_rows")
+          .upsert(payload, { onConflict: "row_key" });
+        if (error) throw error;
+      }
+      return true;
+    }
+
+    async function syncCloudTargets() {
+      if (!state.cloud.enabled || !canCloudEdit()) return false;
+      const rows = cloudTargetRowsFromState();
+      const { error: deleteError } = await state.cloud.client
+        .from("targets")
+        .delete()
+        .neq("target_key", "__never__");
+      if (deleteError) throw deleteError;
+      if (rows.length) {
+        const { error } = await state.cloud.client
+          .from("targets")
+          .upsert(rows, { onConflict: "target_key,period_key" });
+        if (error) throw error;
+      }
+      return true;
+    }
+
+    async function mergeRowsToDb(rows) {
+      if (!state.db) return;
+      const batchSize = 2000;
+      for (let i = 0; i < rows.length; i += batchSize) {
+        await new Promise((resolve, reject) => {
+          const tx = state.db.transaction("rows", "readwrite");
+          const store = tx.objectStore("rows");
+          rows.slice(i, i + batchSize).forEach(row => store.put({ key: rowKey(row), row }));
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+    }
+
+    async function readAllDbRows() {
+      if (!state.db) return [];
+      return new Promise((resolve, reject) => {
+        const tx = state.db.transaction("rows", "readonly");
+        const request = tx.objectStore("rows").getAll();
+        request.onsuccess = () => resolve((request.result || []).map(item => item.row));
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function initDb(preloaded) {
+      try {
+        state.db = await openLocalDb();
+        state.dbReady = true;
+        let dbRows = await readAllDbRows();
+        if (!dbRows.length && preloaded?.length) {
+          els.dbStatus.textContent = "数据库：正在初始化历史数据";
+          await mergeRowsToDb(preloaded.map(enrichRow));
+          dbRows = await readAllDbRows();
+        }
+        els.dbStatus.textContent = `数据库：已累计 ${formatNumber(dbRows.length)} 行`;
+        if (dbRows.length) setRows(dbRows, "本地累计数据库");
+      } catch {
+        els.dbStatus.textContent = "数据库：不可用";
+      }
+    }
+
+    async function refreshFromDb() {
+      const rows = await readAllDbRows();
+      if (!rows.length) {
+        toast("数据库暂无数据");
+        return;
+      }
+      setRows(rows, "本地累计数据库");
+      els.dbStatus.textContent = `数据库：已累计 ${formatNumber(rows.length)} 行`;
+    }
+
+    els.uploadBtn.addEventListener("click", () => els.dataInput.click());
+    els.mappingBtn.addEventListener("click", () => els.mappingInput.click());
+    els.reloadDbBtn.addEventListener("click", () => state.cloud.enabled && state.cloud.user ? loadCloudData() : refreshFromDb());
+    els.cloudLoginBtn.addEventListener("click", cloudSignIn);
+    els.cloudLogoutBtn.addEventListener("click", cloudSignOut);
+    els.cloudReloadBtn.addEventListener("click", loadCloudData);
+    els.reportPageBtn.addEventListener("click", () => showPage("report"));
+    els.targetPageBtn.addEventListener("click", () => showPage("target"));
+    els.saveTargetsBtn.addEventListener("click", saveTargetsFromForm);
+    els.clearTargetsBtn.addEventListener("click", clearTargets);
+    els.targetYearSelect.addEventListener("change", () => {
+      state.targetYear = els.targetYearSelect.value;
+      fillTargetForm();
+    });
+    els.targetQuarterSelect.addEventListener("change", () => {
+      syncTargetMonthToQuarter();
+      fillTargetForm();
+    });
+    els.targetMonthSelect.addEventListener("change", () => {
+      state.targetQuarter = els.targetQuarterSelect.value;
+      state.targetMonth = els.targetMonthSelect.value;
+      fillTargetForm();
+    });
+    els.dataInput.addEventListener("change", async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const rows = (await parseDataFile(file)).map(enrichRow);
+      setRows(rows, file.name);
+      if (state.cloud.enabled && state.cloud.user) {
+        if (!canCloudEdit()) {
+          toast("当前账号没有上传权限");
+          return;
+        }
+        els.dbStatus.textContent = "云端：正在合并上传数据";
+        try {
+          await upsertCloudConsumption(rows);
+          await loadCloudData();
+          toast(`${file.name} 已上传到云端`);
+        } catch (error) {
+          toast(`云端上传失败：${error.message || error}`);
+        }
+        return;
+      }
+      if (state.dbReady) {
+        els.dbStatus.textContent = "数据库：正在合并上传数据";
+        await mergeRowsToDb(rows);
+        await refreshFromDb();
+      }
+    });
+    els.mappingInput.addEventListener("change", async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const rows = await parseDataFile(file);
+      if (configureMapping(rows)) {
+        if (state.cloud.enabled && state.cloud.user) {
+          if (!canCloudEdit()) {
+            toast("当前账号没有上传映射表权限");
+            return;
+          }
+          try {
+            await upsertCloudMapping(rows);
+            toast(`映射表已上传云端：${state.mappingMap.size} 条规则`);
+          } catch (error) {
+            toast(`映射表云端上传失败：${error.message || error}`);
+          }
+          return;
+        }
+        toast(`映射表已加载：${state.mappingMap.size} 条规则`);
+      }
+    });
+    els.monthFilter.addEventListener("change", () => {
+      state.selectedMonth = els.monthFilter.value;
+      applyFilters();
+      render();
+    });
+    [els.dateStart, els.dateEnd].forEach(input => input.addEventListener("change", () => {
+      state.selectedStart = els.dateStart.value;
+      state.selectedEnd = els.dateEnd.value;
+      applyFilters();
+      render();
+    }));
+    els.exportBtn.addEventListener("click", () => {
+      if (!state.rows.length) {
+        toast("当前筛选范围暂无可导出数据");
+        return;
+      }
+      const worksheet = XLSX.utils.json_to_sheet(state.rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "当前筛选数据");
+      XLSX.writeFile(workbook, `数据管理平台-当前筛选数据-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    });
+
+    updateMonthProgress();
+    setInterval(updateMonthProgress, 1000);
+    loadTargets();
+    loadStoredMapping();
+    const preloadedRows = window.PRELOADED_DATASET?.rows || [];
+    if (preloadedRows.length) setRows(preloadedRows, window.PRELOADED_DATASET.name || "消耗明细");
+    initDb(preloadedRows);
+    initCloud();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+﻿window.PRELOADED_DIRECT_CHANNEL_MAPPING = { rows: [] };
