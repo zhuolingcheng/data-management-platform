@@ -946,7 +946,8 @@
         client: null,
         user: null,
         role: "",
-        loading: false
+        loading: false,
+        loadId: 0
       },
       db: null,
       dbReady: false,
@@ -2139,10 +2140,14 @@
       });
     }
 
-    async function fetchAllCloudRows(table, columns = "*") {
+    async function fetchAllCloudRows(table, columns = "*", options = {}) {
       const result = [];
       const pageSize = 1000;
       for (let from = 0; ; from += pageSize) {
+        if (options.loadId && options.loadId !== state.cloud.loadId) return result;
+        if (options.label) {
+          els.dbStatus.textContent = `云端：正在读取${options.label}，已读取 ${formatNumber(result.length)} 行`;
+        }
         const { data, error } = await state.cloud.client
           .from(table)
           .select(columns)
@@ -2152,6 +2157,12 @@
         if (!data || data.length < pageSize) break;
       }
       return result;
+    }
+
+    function mergeRowsInMemory(existing, incoming) {
+      const merged = new Map();
+      [...existing, ...incoming].forEach(row => merged.set(rowKey(row), row));
+      return Array.from(merged.values());
     }
 
     function targetsFromCloud(rows) {
@@ -2174,20 +2185,27 @@
 
     async function loadCloudData() {
       if (!state.cloud.enabled || !state.cloud.user) return;
+      if (state.cloud.loading) {
+        toast("云端数据正在读取中，请稍等");
+        return;
+      }
+      const loadId = state.cloud.loadId + 1;
+      state.cloud.loadId = loadId;
       state.cloud.loading = true;
       els.dbStatus.textContent = "云端：正在读取数据";
       try {
-        const [targetRows, mappingRows, dataRows] = await Promise.all([
-          fetchAllCloudRows("targets", "target_key,period_key,value"),
-          fetchAllCloudRows("mapping_rows", "payload"),
-          fetchAllCloudRows("consumption_rows", "payload")
-        ]);
+        const targetRows = await fetchAllCloudRows("targets", "target_key,period_key,value", { label: "目标", loadId });
+        if (loadId !== state.cloud.loadId) return;
         state.targets = sanitizeTargets(targetsFromCloud(targetRows));
         localStorage.setItem("dmp.targets", JSON.stringify(state.targets));
         fillTargetForm();
         renderTargetStatus();
+        const mappingRows = await fetchAllCloudRows("mapping_rows", "payload", { label: "映射表", loadId });
+        if (loadId !== state.cloud.loadId) return;
         const mappingPayloads = mappingRows.map(item => item.payload).filter(Boolean);
         if (mappingPayloads.length) configureMapping(mappingPayloads, false);
+        const dataRows = await fetchAllCloudRows("consumption_rows", "payload", { label: "消耗数据", loadId });
+        if (loadId !== state.cloud.loadId) return;
         const payloads = dataRows.map(item => item.payload).filter(Boolean);
         if (payloads.length) {
           setRows(payloads, "Supabase 云端数据库");
@@ -2196,11 +2214,16 @@
           els.dbStatus.textContent = "云端：暂无消耗数据";
         }
       } catch (error) {
-        els.dbStatus.textContent = "云端：读取失败";
-        toast(`云端读取失败：${error.message || error}`);
+        if (loadId === state.cloud.loadId) {
+          const message = error.message || error;
+          els.dbStatus.textContent = `云端：读取失败（${message}）`;
+          toast(`云端读取失败：${message}`);
+        }
       } finally {
-        state.cloud.loading = false;
-        updateCloudUi();
+        if (loadId === state.cloud.loadId) {
+          state.cloud.loading = false;
+          updateCloudUi();
+        }
       }
     }
 
@@ -2292,6 +2315,7 @@
       if (!state.cloud.enabled || !canCloudEdit()) return false;
       const batchSize = 500;
       for (let i = 0; i < rows.length; i += batchSize) {
+        els.dbStatus.textContent = `云端：正在上传消耗数据 ${formatNumber(Math.min(i + batchSize, rows.length))}/${formatNumber(rows.length)} 行`;
         const payload = rows.slice(i, i + batchSize).map(row => ({
           row_key: rowKey(row),
           row_date: rowDateValue(row) || null,
@@ -2426,10 +2450,14 @@
         els.dbStatus.textContent = "云端：正在合并上传数据";
         try {
           await upsertCloudConsumption(rows);
-          await loadCloudData();
+          const mergedRows = mergeRowsInMemory(state.allRows, rows);
+          setRows(mergedRows, "Supabase 云端数据库");
+          els.dbStatus.textContent = `云端：已上传/合并 ${formatNumber(rows.length)} 行，当前显示 ${formatNumber(mergedRows.length)} 行`;
           toast(`${file.name} 已上传到云端`);
         } catch (error) {
-          toast(`云端上传失败：${error.message || error}`);
+          const message = error.message || error;
+          els.dbStatus.textContent = `云端：上传失败（${message}）`;
+          toast(`云端上传失败：${message}`);
         }
         return;
       }
