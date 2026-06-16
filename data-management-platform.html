@@ -2555,14 +2555,8 @@
     async function upsertCloudConsumption(rows) {
       if (!state.cloud.enabled || !canCloudEdit()) return false;
       const dates = incomingDates(rows);
-      for (let i = 0; i < dates.length; i += 20) {
-        els.dbStatus.textContent = `云端：正在替换旧日期数据 ${formatNumber(Math.min(i + 20, dates.length))}/${formatNumber(dates.length)} 天`;
-        const { error } = await state.cloud.client
-          .from("consumption_rows")
-          .delete()
-          .in("row_date", dates.slice(i, i + 20));
-        if (error) throw error;
-      }
+      const removedRows = await deleteCloudConsumptionDates(dates);
+      if (removedRows) els.dbStatus.textContent = `云端：已删除旧日期明细 ${formatNumber(removedRows)} 行，准备上传新数据`;
       const batchSize = 500;
       for (let i = 0; i < rows.length; i += batchSize) {
         els.dbStatus.textContent = `云端：正在上传消耗数据 ${formatNumber(Math.min(i + batchSize, rows.length))}/${formatNumber(rows.length)} 行`;
@@ -2578,6 +2572,30 @@
         if (error) throw error;
       }
       return true;
+    }
+
+    async function deleteCloudConsumptionDates(dates) {
+      if (!dates.length) return 0;
+      els.dbStatus.textContent = `云端：正在删除 ${dates.join("、")} 的旧明细`;
+      try {
+        const { data, error } = await state.cloud.client.rpc("delete_consumption_dates", { date_values: dates });
+        if (error) throw error;
+        return Number(data) || 0;
+      } catch (error) {
+        const message = error.message || String(error);
+        if (!/delete_consumption_dates|schema cache|function/i.test(message)) throw error;
+      }
+      let removed = 0;
+      for (let i = 0; i < dates.length; i += 20) {
+        els.dbStatus.textContent = `云端：正在替换旧日期数据 ${formatNumber(Math.min(i + 20, dates.length))}/${formatNumber(dates.length)} 天`;
+        const { error, count } = await state.cloud.client
+          .from("consumption_rows")
+          .delete({ count: "exact" })
+          .in("row_date", dates.slice(i, i + 20));
+        if (error) throw error;
+        removed += Number(count) || 0;
+      }
+      return removed;
     }
 
     async function upsertCloudMapping(rows) {
