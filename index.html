@@ -1075,12 +1075,48 @@
       return rows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, coerce(value)])));
     }
 
+    function excelCellValue(cell, isFirstDateColumn = false) {
+      if (!cell) return "";
+      if (isFirstDateColumn) {
+        const displayText = String(cell.w ?? "").trim();
+        if (displayText) return displayText;
+        if (cell.v instanceof Date && !Number.isNaN(cell.v.getTime())) {
+          return formatYmd(cell.v.getFullYear(), cell.v.getMonth() + 1, cell.v.getDate());
+        }
+      }
+      return cell.v ?? cell.w ?? "";
+    }
+
+    function parseExcelSheetRows(sheet) {
+      if (!sheet["!ref"]) return [];
+      const range = XLSX.utils.decode_range(sheet["!ref"]);
+      const headers = [];
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: col })];
+        headers.push(String(cell?.w ?? cell?.v ?? `字段${col - range.s.c + 1}`).trim() || `字段${col - range.s.c + 1}`);
+      }
+      const rows = [];
+      for (let rowIndex = range.s.r + 1; rowIndex <= range.e.r; rowIndex++) {
+        const row = {};
+        let hasValue = false;
+        for (let col = range.s.c; col <= range.e.c; col++) {
+          const key = headers[col - range.s.c];
+          const cell = sheet[XLSX.utils.encode_cell({ r: rowIndex, c: col })];
+          const value = excelCellValue(cell, col === range.s.c);
+          if (String(value ?? "").trim() !== "") hasValue = true;
+          row[key] = coerce(value);
+        }
+        if (hasValue) rows.push(row);
+      }
+      return rows;
+    }
+
     async function parseDataFile(file) {
       if (isExcelFile(file)) {
         const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+        const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
         const firstSheet = workbook.SheetNames[0];
-        return normalizeWorkbookRows(XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "", raw: true }));
+        return normalizeWorkbookRows(parseExcelSheetRows(workbook.Sheets[firstSheet]));
       }
       if (file.name.toLowerCase().endsWith(".json")) {
         const parsed = JSON.parse(await file.text());
@@ -1097,6 +1133,11 @@
         date.getUTCDate() !== Number(day)
       ) return "";
       return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+    }
+
+    function formatChinaDateFromTimestamp(timestamp) {
+      const chinaDate = new Date(Number(timestamp) + 8 * 60 * 60 * 1000);
+      return formatYmd(chinaDate.getUTCFullYear(), chinaDate.getUTCMonth() + 1, chinaDate.getUTCDate());
     }
 
     function sourceDateColumn(row) {
@@ -1116,7 +1157,7 @@
 
     function parseDateLike(value) {
       if (value instanceof Date && !Number.isNaN(value.getTime())) {
-        return formatYmd(value.getFullYear(), value.getMonth() + 1, value.getDate());
+        return formatChinaDateFromTimestamp(value.getTime());
       }
       if (typeof value === "number" && value > 20000 && value < 80000) {
         const excelDate = new Date(Date.UTC(1899, 11, 30) + Math.round(value) * 86400000);
@@ -1126,7 +1167,7 @@
       if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
         const parsedIso = new Date(text);
         if (!Number.isNaN(parsedIso.getTime())) {
-          return formatYmd(parsedIso.getFullYear(), parsedIso.getMonth() + 1, parsedIso.getDate());
+          return formatChinaDateFromTimestamp(parsedIso.getTime());
         }
       }
       const ymd = text.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
