@@ -1080,7 +1080,7 @@
         const buffer = await file.arrayBuffer();
         const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
         const firstSheet = workbook.SheetNames[0];
-        return normalizeWorkbookRows(XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "", raw: false }));
+        return normalizeWorkbookRows(XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "", raw: true }));
       }
       if (file.name.toLowerCase().endsWith(".json")) {
         const parsed = JSON.parse(await file.text());
@@ -1089,14 +1089,36 @@
       return parseCSV(await file.text());
     }
 
+    function formatYmd(year, month, day) {
+      const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+      if (
+        date.getUTCFullYear() !== Number(year) ||
+        date.getUTCMonth() !== Number(month) - 1 ||
+        date.getUTCDate() !== Number(day)
+      ) return "";
+      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+    }
+
     function rowDateValue(row) {
+      const stored = String(row["__标准日期"] || row.row_date || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored;
       const value = row["日期"];
-      if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return formatYmd(value.getFullYear(), value.getMonth() + 1, value.getDate());
+      }
+      if (typeof value === "number" && value > 20000 && value < 80000) {
+        const excelDate = new Date(Date.UTC(1899, 11, 30) + Math.round(value) * 86400000);
+        return formatYmd(excelDate.getUTCFullYear(), excelDate.getUTCMonth() + 1, excelDate.getUTCDate());
+      }
       const text = String(value ?? "").trim();
-      const match = text.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
-      if (match) return `${match[1]}-${String(Number(match[2])).padStart(2, "0")}-${String(Number(match[3])).padStart(2, "0")}`;
-      const parsed = new Date(text);
-      return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+      const ymd = text.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
+      if (ymd) return formatYmd(ymd[1], ymd[2], ymd[3]);
+      const mdy = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+      if (mdy) {
+        const year = Number(mdy[3]) < 100 ? 2000 + Number(mdy[3]) : Number(mdy[3]);
+        return formatYmd(year, mdy[1], mdy[2]);
+      }
+      return "";
     }
 
     function monthFromDate(value) {
@@ -1122,7 +1144,8 @@
 
     function enrichRow(row) {
       const next = { ...row };
-      next["月份"] = next["月份"] || monthFromDate(next["日期"]);
+      next["__标准日期"] = rowDateValue(next);
+      next["月份"] = next["月份"] || (next["__标准日期"] ? next["__标准日期"].slice(0, 7) : monthFromDate(next["日期"]));
       next["商务组"] = businessGroup(next["商务"]);
       const canonicalMode = cooperationMode(next);
       if (canonicalMode && !normalizeText(next["合作模式-DOSS"])) next["合作模式-DOSS"] = canonicalMode;
@@ -1527,12 +1550,12 @@
     }
 
     function nonGrantSpend(row) {
-      const value = Number(row["非赠款消耗"]);
+      const value = Number(String(row["非赠款消耗"] ?? "").replace(/,/g, ""));
       return Number.isFinite(value) ? value : 0;
     }
 
     function grantSpend(row) {
-      const value = Number(row["赠款消耗"]);
+      const value = Number(String(row["赠款消耗"] ?? "").replace(/,/g, ""));
       return Number.isFinite(value) ? value : 0;
     }
 
@@ -1680,6 +1703,35 @@
         }
       }
       return Array.from(map.values()).sort((a, b) => a.日期.localeCompare(b.日期));
+    }
+
+    function dateParseAuditRows(rows = state.allRows) {
+      const map = new Map();
+      for (const row of rows) {
+        const rawDate = String(row["日期"] ?? "").trim();
+        const standardDate = rowDateValue(row);
+        const key = `${rawDate}||${standardDate}`;
+        if (!map.has(key)) {
+          map.set(key, {
+            原始日期: rawDate,
+            平台标准日期: standardDate,
+            明细行数: 0,
+            总非赠款消耗: 0,
+            本地推非赠款消耗: 0,
+            AD非赠款消耗: 0
+          });
+        }
+        const item = map.get(key);
+        const spend = nonGrantSpend(row);
+        item.明细行数 += 1;
+        item.总非赠款消耗 += spend;
+        if (isLocalPush(row)) item.本地推非赠款消耗 += spend;
+        if (isAd(row)) item.AD非赠款消耗 += spend;
+      }
+      return Array.from(map.values()).sort((a, b) => {
+        const dateCompare = String(a.平台标准日期).localeCompare(String(b.平台标准日期));
+        return dateCompare || String(a.原始日期).localeCompare(String(b.原始日期));
+      });
     }
 
     function multiGroupDailySeries(rows, start, end, mode) {
@@ -2474,11 +2526,15 @@
         localStorage.setItem("dmp.targets", JSON.stringify(state.targets));
         fillTargetForm();
         renderTargetStatus();
-        const dataRows = await fetchAllCloudRows("consumption_rows", "row_key,payload,uploaded_at", { label: "消耗数据", loadId });
+        const dataRows = await fetchAllCloudRows("consumption_rows", "row_key,row_date,payload,uploaded_at", { label: "消耗数据", loadId });
         if (loadId !== state.cloud.loadId) return;
         const payloads = dataRows
           .sort((a, b) => String(a.uploaded_at || "").localeCompare(String(b.uploaded_at || "")))
-          .map(item => item.payload ? { ...item.payload, "__平台行ID": item.payload["__平台行ID"] || item.row_key } : null)
+          .map(item => item.payload ? {
+            ...item.payload,
+            "__标准日期": item.row_date || item.payload["__标准日期"] || "",
+            "__平台行ID": item.payload["__平台行ID"] || item.row_key
+          } : null)
           .filter(Boolean)
           .map(enrichRow);
         if (payloads.length) {
@@ -2958,8 +3014,10 @@
       }
       const auditRows = dailyAuditRows();
       const worksheet = XLSX.utils.json_to_sheet(auditRows);
+      const parseWorksheet = XLSX.utils.json_to_sheet(dateParseAuditRows());
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "日度非赠款消耗校验");
+      XLSX.utils.book_append_sheet(workbook, parseWorksheet, "日期解析校验");
       XLSX.writeFile(workbook, `数据管理平台-日度校验-${new Date().toISOString().slice(0, 10)}.xlsx`);
     });
 
