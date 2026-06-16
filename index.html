@@ -2231,7 +2231,132 @@
       return count;
     }
 
+    function isCloudSnapshotMissing(error) {
+      const message = error?.message || String(error || "");
+      return /dataset_meta|dataset_chunks|schema cache|relation|does not exist/i.test(message);
+    }
+
+    async function getCloudSnapshotMeta() {
+      if (!state.cloud.enabled || !state.cloud.user) return null;
+      const { data, error } = await state.cloud.client
+        .from("dataset_meta")
+        .select("version,row_count,updated_at")
+        .eq("dataset_key", "consumption_rows")
+        .maybeSingle();
+      if (error) {
+        if (isCloudSnapshotMissing(error)) return null;
+        throw error;
+      }
+      return data || null;
+    }
+
+    async function fetchCloudSnapshotChunks(meta, loadId) {
+      const chunks = [];
+      const pageSize = 100;
+      for (let from = 0; ; from += pageSize) {
+        if (loadId && loadId !== state.cloud.loadId) return chunks;
+        els.dbStatus.textContent = `云端：正在读取快照，已读取 ${formatNumber(chunks.length)} 个分片`;
+        const { data, error } = await state.cloud.client
+          .from("dataset_chunks")
+          .select("chunk_index,payload")
+          .eq("dataset_key", "consumption_rows")
+          .eq("version", meta.version)
+          .order("chunk_index", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        chunks.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+      }
+      return chunks;
+    }
+
+    async function loadCloudSnapshot(meta = null) {
+      const snapshotMeta = meta || await getCloudSnapshotMeta();
+      if (!snapshotMeta?.version || !Number(snapshotMeta.row_count)) return false;
+      const loadId = state.cloud.loadId + 1;
+      state.cloud.loadId = loadId;
+      state.cloud.loading = true;
+      try {
+        const chunks = await fetchCloudSnapshotChunks(snapshotMeta, loadId);
+        if (loadId !== state.cloud.loadId) return true;
+        const rows = chunks.flatMap(chunk => Array.isArray(chunk.payload) ? chunk.payload : []).map(enrichRow);
+        if (rows.length) {
+          setRows(rows, "Supabase 云端快照");
+          if (state.dbReady) {
+            await clearLocalRowsDb();
+            await mergeRowsToDb(rows);
+          }
+          localStorage.setItem("dmp.cloudSnapshotVersion", snapshotMeta.version);
+          els.dbStatus.textContent = `云端：已读取最新快照 ${formatNumber(rows.length)} 行`;
+          return true;
+        }
+        return false;
+      } finally {
+        if (loadId === state.cloud.loadId) {
+          state.cloud.loading = false;
+          updateCloudUi();
+        }
+      }
+    }
+
+    async function saveCloudDatasetSnapshot(rows) {
+      if (!state.cloud.enabled || !canCloudEdit() || !rows.length) return false;
+      const version = `${Date.now()}-${hashString(`${rows.length}|${rowKey(rows[0])}|${rowKey(rows[rows.length - 1])}`)}`;
+      const chunkSize = 500;
+      const chunks = [];
+      for (let i = 0; i < rows.length; i += chunkSize) {
+        chunks.push({
+          dataset_key: "consumption_rows",
+          version,
+          chunk_index: Math.floor(i / chunkSize),
+          row_count: Math.min(chunkSize, rows.length - i),
+          payload: rows.slice(i, i + chunkSize)
+        });
+      }
+      try {
+        for (let i = 0; i < chunks.length; i += 1) {
+          els.dbStatus.textContent = `云端：正在生成快照 ${formatNumber(i + 1)}/${formatNumber(chunks.length)} 个分片`;
+          const { error } = await state.cloud.client
+            .from("dataset_chunks")
+            .upsert(chunks[i], { onConflict: "dataset_key,version,chunk_index" });
+          if (error) throw error;
+        }
+        const { error: metaError } = await state.cloud.client
+          .from("dataset_meta")
+          .upsert({
+            dataset_key: "consumption_rows",
+            version,
+            row_count: rows.length,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "dataset_key" });
+        if (metaError) throw metaError;
+        await state.cloud.client
+          .from("dataset_chunks")
+          .delete()
+          .eq("dataset_key", "consumption_rows")
+          .neq("version", version);
+        localStorage.setItem("dmp.cloudSnapshotVersion", version);
+        return true;
+      } catch (error) {
+        if (isCloudSnapshotMissing(error)) {
+          toast("快照表未配置，已保留旧同步方式");
+          return false;
+        }
+        throw error;
+      }
+    }
+
     async function syncCloudDataIfNeeded() {
+      const snapshotMeta = await getCloudSnapshotMeta();
+      if (snapshotMeta?.version && Number(snapshotMeta.row_count) > 0) {
+        const localVersion = localStorage.getItem("dmp.cloudSnapshotVersion") || "";
+        if (state.allRows.length === Number(snapshotMeta.row_count) && localVersion === snapshotMeta.version) {
+          els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，已是最新快照`;
+          return;
+        }
+        await loadCloudSnapshot(snapshotMeta);
+        return;
+      }
       const cloudCount = await getCloudConsumptionCount();
       if (!Number.isFinite(cloudCount)) return;
       if (cloudCount === 0) {
@@ -2273,6 +2398,7 @@
         if (payloads.length) {
           setRows(payloads, "Supabase 云端数据库");
           if (state.dbReady) await mergeRowsToDb(payloads);
+          if (canCloudEdit()) await saveCloudDatasetSnapshot(payloads);
           els.dbStatus.textContent = `云端：已同步并缓存 ${formatNumber(payloads.length)} 行`;
         } else {
           els.dbStatus.textContent = "云端：暂无消耗数据";
@@ -2289,6 +2415,13 @@
           updateCloudUi();
         }
       }
+    }
+
+    async function loadLatestCloudDataset() {
+      if (!state.cloud.enabled || !state.cloud.user) return;
+      const snapshotLoaded = await loadCloudSnapshot();
+      if (snapshotLoaded) return;
+      await loadCloudData();
     }
 
     async function loadCloudRole() {
@@ -2470,6 +2603,12 @@
         removed += keys.length;
         els.dbStatus.textContent = `数据库：正在分批清空云端历史数据，已清空 ${formatNumber(removed)} 行`;
       }
+      try {
+        await state.cloud.client.from("dataset_meta").delete().eq("dataset_key", "consumption_rows");
+        await state.cloud.client.from("dataset_chunks").delete().eq("dataset_key", "consumption_rows");
+      } catch (error) {
+        if (!isCloudSnapshotMissing(error)) throw error;
+      }
     }
 
     async function mergeRowsToDb(rows) {
@@ -2514,6 +2653,7 @@
       state.selectedStart = "";
       state.selectedEnd = "";
       state.fileName = "历史数据已清空";
+      localStorage.removeItem("dmp.cloudSnapshotVersion");
       configureFilters();
       applyFilters();
       render();
@@ -2594,7 +2734,7 @@
         toast("当前账号只有查看权限，无法同步云端数据");
         return;
       }
-      loadCloudData();
+      loadLatestCloudDataset();
     });
     els.reportPageBtn.addEventListener("click", () => showPage("report"));
     els.targetPageBtn.addEventListener("click", () => showPage("target"));
@@ -2629,6 +2769,7 @@
           const mergedRows = mergeRowsInMemory(state.allRows, rows);
           setRows(mergedRows, "Supabase 云端数据库");
           if (state.dbReady) await mergeRowsToDb(rows);
+          await saveCloudDatasetSnapshot(mergedRows);
           els.dbStatus.textContent = `云端：已上传/合并 ${formatNumber(rows.length)} 行，当前显示 ${formatNumber(mergedRows.length)} 行`;
           toast(`${file.name} 已上传到云端`);
         } catch (error) {
