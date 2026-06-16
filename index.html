@@ -1099,10 +1099,22 @@
       return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
     }
 
-    function rowDateValue(row) {
-      const stored = String(row["__标准日期"] || row.row_date || "").trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored;
-      const value = row["日期"];
+    function sourceDateColumn(row) {
+      const stored = String(row["__日期字段名"] || "").trim();
+      if (stored && Object.prototype.hasOwnProperty.call(row, stored)) return stored;
+      if (Object.prototype.hasOwnProperty.call(row, "日期")) return "日期";
+      return Object.keys(row).find(key => !key.startsWith("__") && !["月份", "商务组"].includes(key)) || "";
+    }
+
+    function sourceDateValue(row) {
+      if (Object.prototype.hasOwnProperty.call(row, "__首列日期原值") && String(row["__首列日期原值"] ?? "").trim() !== "") {
+        return row["__首列日期原值"];
+      }
+      const column = sourceDateColumn(row);
+      return column ? row[column] : "";
+    }
+
+    function parseDateLike(value) {
       if (value instanceof Date && !Number.isNaN(value.getTime())) {
         return formatYmd(value.getFullYear(), value.getMonth() + 1, value.getDate());
       }
@@ -1118,6 +1130,14 @@
         const year = Number(mdy[3]) < 100 ? 2000 + Number(mdy[3]) : Number(mdy[3]);
         return formatYmd(year, mdy[1], mdy[2]);
       }
+      return "";
+    }
+
+    function rowDateValue(row) {
+      const parsed = parseDateLike(sourceDateValue(row));
+      if (parsed) return parsed;
+      const stored = String(row["__标准日期"] || row.row_date || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored;
       return "";
     }
 
@@ -1708,12 +1728,14 @@
     function dateParseAuditRows(rows = state.allRows) {
       const map = new Map();
       for (const row of rows) {
-        const rawDate = String(row["日期"] ?? "").trim();
+        const dateColumn = sourceDateColumn(row);
+        const rawDate = String(sourceDateValue(row) ?? "").trim();
         const standardDate = rowDateValue(row);
-        const key = `${rawDate}||${standardDate}`;
+        const key = `${dateColumn}||${rawDate}||${standardDate}`;
         if (!map.has(key)) {
           map.set(key, {
-            原始日期: rawDate,
+            日期来源字段: dateColumn,
+            首列原始值: rawDate,
             平台标准日期: standardDate,
             明细行数: 0,
             总非赠款消耗: 0,
@@ -1730,7 +1752,7 @@
       }
       return Array.from(map.values()).sort((a, b) => {
         const dateCompare = String(a.平台标准日期).localeCompare(String(b.平台标准日期));
-        return dateCompare || String(a.原始日期).localeCompare(String(b.原始日期));
+        return dateCompare || String(a.首列原始值).localeCompare(String(b.首列原始值));
       });
     }
 
@@ -2319,12 +2341,17 @@
 
     function prepareUploadedRows(rawRows, fileName) {
       const uploadId = `${Date.now()}-${hashString(`${fileName}|${rawRows.length}|${Math.random()}`)}`;
-      return rawRows.map((row, index) => enrichRow({
-        ...row,
-        "__源文件名": fileName,
-        "__源文件行号": index + 1,
-        "__平台行ID": `${uploadId}-${String(index + 1).padStart(6, "0")}`
-      }));
+      return rawRows.map((row, index) => {
+        const firstColumn = Object.keys(row).find(key => !key.startsWith("__")) || "日期";
+        return enrichRow({
+          ...row,
+          "__日期字段名": firstColumn,
+          "__首列日期原值": row[firstColumn] ?? "",
+          "__源文件名": fileName,
+          "__源文件行号": index + 1,
+          "__平台行ID": `${uploadId}-${String(index + 1).padStart(6, "0")}`
+        });
+      });
     }
 
     function targetsFromCloud(rows) {
