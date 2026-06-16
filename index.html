@@ -1123,6 +1123,12 @@
         return formatYmd(excelDate.getUTCFullYear(), excelDate.getUTCMonth() + 1, excelDate.getUTCDate());
       }
       const text = String(value ?? "").trim();
+      if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+        const parsedIso = new Date(text);
+        if (!Number.isNaN(parsedIso.getTime())) {
+          return formatYmd(parsedIso.getFullYear(), parsedIso.getMonth() + 1, parsedIso.getDate());
+        }
+      }
       const ymd = text.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
       if (ymd) return formatYmd(ymd[1], ymd[2], ymd[3]);
       const mdy = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
@@ -2343,10 +2349,11 @@
       const uploadId = `${Date.now()}-${hashString(`${fileName}|${rawRows.length}|${Math.random()}`)}`;
       return rawRows.map((row, index) => {
         const firstColumn = Object.keys(row).find(key => !key.startsWith("__")) || "日期";
+        const firstDate = parseDateLike(row[firstColumn]) || row[firstColumn] || "";
         return enrichRow({
           ...row,
           "__日期字段名": firstColumn,
-          "__首列日期原值": row[firstColumn] ?? "",
+          "__首列日期原值": firstDate,
           "__源文件名": fileName,
           "__源文件行号": index + 1,
           "__平台行ID": `${uploadId}-${String(index + 1).padStart(6, "0")}`
