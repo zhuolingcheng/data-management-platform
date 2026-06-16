@@ -1173,7 +1173,7 @@
     }
 
     function setRows(rows, fileName) {
-      state.allRows = rows.filter(row => row && typeof row === "object").map(enrichRow);
+      state.allRows = dedupeRows(rows.filter(row => row && typeof row === "object").map(enrichRow));
       state.fileName = fileName;
       state.months = Array.from(new Set(state.allRows.map(row => row["月份"]).filter(Boolean))).sort();
       state.selectedMonth = "all";
@@ -1498,19 +1498,9 @@
     }
 
     function cooperationMode(row) {
-      const candidates = [
-        row["合作模式-DOSS"],
-        row["合作模式"],
-        row["DOSS合作模式"],
-        row["合作模式DOSS"],
-        row["账户合作模式"],
-        row["客户合作模式"],
-        row["业务模式"],
-        row["业务类型"]
-      ];
-      const text = candidates.map(normalizeText).find(Boolean) || "";
-      if (text.includes("代运营")) return "代运营";
-      if (text.includes("代充值")) return "代充值";
+      const text = normalizeText(row["合作模式-DOSS"]);
+      if (text === "代运营") return "代运营";
+      if (text === "代充值") return "代充值";
       return text;
     }
 
@@ -2140,7 +2130,16 @@
     }
 
     function rowKey(row) {
-      return [row["日期"], row["账户ID"], row["账户名称"], row["广告主主体"], row["商机名称"], row["端口ID"], row["媒体端口"], row["总消耗"], row["非赠款消耗"], row["赠款消耗"]].map(normalizeText).join("|");
+      return [
+        rowDateValue(row),
+        row["账户ID"] || row["账户名称"],
+        row["广告主主体"],
+        row["商机名称"],
+        row["端口ID"],
+        row["媒体平台"],
+        row["媒体端口"],
+        row["合作模式-DOSS"]
+      ].map(normalizeText).join("|");
     }
 
     function hashString(value) {
@@ -2192,6 +2191,10 @@
       const merged = new Map();
       [...existing, ...incoming].forEach(row => merged.set(rowKey(row), row));
       return Array.from(merged.values());
+    }
+
+    function dedupeRows(rows) {
+      return mergeRowsInMemory([], rows);
     }
 
     function targetsFromCloud(rows) {
@@ -2279,7 +2282,7 @@
       try {
         const chunks = await fetchCloudSnapshotChunks(snapshotMeta, loadId);
         if (loadId !== state.cloud.loadId) return true;
-        const rows = chunks.flatMap(chunk => Array.isArray(chunk.payload) ? chunk.payload : []).map(enrichRow);
+        const rows = dedupeRows(chunks.flatMap(chunk => Array.isArray(chunk.payload) ? chunk.payload : []).map(enrichRow));
         if (rows.length) {
           setRows(rows, "Supabase 云端快照");
           if (state.dbReady) {
@@ -2301,6 +2304,7 @@
 
     async function saveCloudDatasetSnapshot(rows) {
       if (!state.cloud.enabled || !canCloudEdit() || !rows.length) return false;
+      rows = dedupeRows(rows.map(enrichRow));
       const version = `${Date.now()}-${hashString(`${rows.length}|${rowKey(rows[0])}|${rowKey(rows[rows.length - 1])}`)}`;
       const chunkSize = 500;
       const chunks = [];
@@ -2392,9 +2396,13 @@
         localStorage.setItem("dmp.targets", JSON.stringify(state.targets));
         fillTargetForm();
         renderTargetStatus();
-        const dataRows = await fetchAllCloudRows("consumption_rows", "payload", { label: "消耗数据", loadId });
+        const dataRows = await fetchAllCloudRows("consumption_rows", "payload,uploaded_at", { label: "消耗数据", loadId });
         if (loadId !== state.cloud.loadId) return;
-        const payloads = dataRows.map(item => item.payload).filter(Boolean).map(enrichRow);
+        const payloads = dedupeRows(dataRows
+          .sort((a, b) => String(a.uploaded_at || "").localeCompare(String(b.uploaded_at || "")))
+          .map(item => item.payload)
+          .filter(Boolean)
+          .map(enrichRow));
         if (payloads.length) {
           setRows(payloads, "Supabase 云端数据库");
           if (state.dbReady) await mergeRowsToDb(payloads);
