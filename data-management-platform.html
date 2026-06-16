@@ -1173,7 +1173,7 @@
     }
 
     function setRows(rows, fileName) {
-      state.allRows = dedupeRows(rows.filter(row => row && typeof row === "object").map(enrichRow));
+      state.allRows = rows.filter(row => row && typeof row === "object").map(enrichRow);
       state.fileName = fileName;
       state.months = Array.from(new Set(state.allRows.map(row => row["月份"]).filter(Boolean))).sort();
       state.selectedMonth = "all";
@@ -2130,6 +2130,8 @@
     }
 
     function rowKey(row) {
+      const platformId = normalizeText(row["__平台行ID"]);
+      if (platformId) return platformId;
       return [
         rowDateValue(row),
         row["账户ID"],
@@ -2147,7 +2149,8 @@
         row["合作模式-DOSS"],
         row["总消耗"],
         row["非赠款消耗"],
-        row["赠款消耗"]
+        row["赠款消耗"],
+        row["__源文件行号"] || ""
       ].map(normalizeText).join("|");
     }
 
@@ -2196,16 +2199,6 @@
       return result;
     }
 
-    function mergeRowsInMemory(existing, incoming) {
-      const merged = new Map();
-      [...existing, ...incoming].forEach(row => merged.set(rowKey(row), row));
-      return Array.from(merged.values());
-    }
-
-    function dedupeRows(rows) {
-      return mergeRowsInMemory([], rows);
-    }
-
     function incomingDates(rows) {
       return Array.from(new Set(rows.map(rowDateValue).filter(Boolean))).sort();
     }
@@ -2216,7 +2209,17 @@
         const date = rowDateValue(row);
         return !date || !dates.has(date);
       });
-      return dedupeRows([...retained, ...incoming]);
+      return [...retained, ...incoming];
+    }
+
+    function prepareUploadedRows(rawRows, fileName) {
+      const uploadId = `${Date.now()}-${hashString(`${fileName}|${rawRows.length}|${Math.random()}`)}`;
+      return rawRows.map((row, index) => enrichRow({
+        ...row,
+        "__源文件名": fileName,
+        "__源文件行号": index + 1,
+        "__平台行ID": `${uploadId}-${String(index + 1).padStart(6, "0")}`
+      }));
     }
 
     function targetsFromCloud(rows) {
@@ -2304,7 +2307,7 @@
       try {
         const chunks = await fetchCloudSnapshotChunks(snapshotMeta, loadId);
         if (loadId !== state.cloud.loadId) return true;
-        const rows = dedupeRows(chunks.flatMap(chunk => Array.isArray(chunk.payload) ? chunk.payload : []).map(enrichRow));
+        const rows = chunks.flatMap(chunk => Array.isArray(chunk.payload) ? chunk.payload : []).map(enrichRow);
         if (rows.length) {
           setRows(rows, "Supabase 云端快照");
           if (state.dbReady) {
@@ -2326,7 +2329,7 @@
 
     async function saveCloudDatasetSnapshot(rows) {
       if (!state.cloud.enabled || !canCloudEdit() || !rows.length) return false;
-      rows = dedupeRows(rows.map(enrichRow));
+      rows = rows.map(enrichRow);
       const version = `${Date.now()}-${hashString(`${rows.length}|${rowKey(rows[0])}|${rowKey(rows[rows.length - 1])}`)}`;
       const chunkSize = 500;
       const chunks = [];
@@ -2418,13 +2421,13 @@
         localStorage.setItem("dmp.targets", JSON.stringify(state.targets));
         fillTargetForm();
         renderTargetStatus();
-        const dataRows = await fetchAllCloudRows("consumption_rows", "payload,uploaded_at", { label: "消耗数据", loadId });
+        const dataRows = await fetchAllCloudRows("consumption_rows", "row_key,payload,uploaded_at", { label: "消耗数据", loadId });
         if (loadId !== state.cloud.loadId) return;
-        const payloads = dedupeRows(dataRows
+        const payloads = dataRows
           .sort((a, b) => String(a.uploaded_at || "").localeCompare(String(b.uploaded_at || "")))
-          .map(item => item.payload)
+          .map(item => item.payload ? { ...item.payload, "__平台行ID": item.payload["__平台行ID"] || item.row_key } : null)
           .filter(Boolean)
-          .map(enrichRow));
+          .map(enrichRow);
         if (payloads.length) {
           setRows(payloads, "Supabase 云端数据库");
           if (state.dbReady) await mergeRowsToDb(payloads);
@@ -2799,7 +2802,7 @@
     els.dataInput.addEventListener("change", async event => {
       const file = event.target.files[0];
       if (!file) return;
-      const rows = (await parseDataFile(file)).map(enrichRow);
+      const rows = prepareUploadedRows(await parseDataFile(file), file.name);
       const existingRows = state.allRows.slice();
       const localMergedRows = replaceRowsByDates(existingRows, rows);
       setRows(localMergedRows, file.name);
@@ -2871,7 +2874,8 @@
         toast("当前筛选范围暂无可导出数据");
         return;
       }
-      const worksheet = XLSX.utils.json_to_sheet(state.rows);
+      const exportRows = state.rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => !key.startsWith("__"))));
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "当前筛选数据");
       XLSX.writeFile(workbook, `数据管理平台-当前筛选数据-${new Date().toISOString().slice(0, 10)}.xlsx`);
