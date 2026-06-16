@@ -569,6 +569,7 @@
           <button class="btn" type="button" id="mappingBtn">上传映射表</button>
           <button class="btn" type="button" id="reloadDbBtn">读取本地缓存</button>
           <button class="btn" type="button" id="exportBtn">导出当前数据</button>
+          <button class="btn" type="button" id="exportAuditBtn">导出日度校验</button>
           <button class="btn danger" type="button" id="clearHistoryBtn">清空历史数据</button>
         </div>
         <input class="file-input" type="file" id="dataInput" accept=".xlsx,.xls,.csv,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
@@ -971,6 +972,7 @@
       reloadDbBtn: document.getElementById("reloadDbBtn"),
       clearHistoryBtn: document.getElementById("clearHistoryBtn"),
       exportBtn: document.getElementById("exportBtn"),
+      exportAuditBtn: document.getElementById("exportAuditBtn"),
       reportPageBtn: document.getElementById("reportPageBtn"),
       targetPageBtn: document.getElementById("targetPageBtn"),
       reportView: document.getElementById("reportView"),
@@ -1529,6 +1531,11 @@
       return Number.isFinite(value) ? value : 0;
     }
 
+    function grantSpend(row) {
+      const value = Number(row["赠款消耗"]);
+      return Number.isFinite(value) ? value : 0;
+    }
+
     function sumNonGrant(rows, predicate = () => true) {
       return rows.reduce((sum, row) => predicate(row) ? sum + nonGrantSpend(row) : sum, 0);
     }
@@ -1627,6 +1634,52 @@
         series.push({ date, value: map.get(date) || 0 });
       }
       return series;
+    }
+
+    function dailyAuditRows(rows = state.allRows) {
+      const map = new Map();
+      for (const row of rows) {
+        const date = rowDateValue(row);
+        if (!date) continue;
+        if (!map.has(date)) {
+          map.set(date, {
+            日期: date,
+            明细行数: 0,
+            总非赠款消耗: 0,
+            本地推非赠款消耗: 0,
+            AD非赠款消耗: 0,
+            本地推代运营非赠款消耗: 0,
+            本地推代充值非赠款消耗: 0,
+            赠款消耗: 0,
+            本地推行数: 0,
+            AD行数: 0,
+            代运营行数: 0,
+            代充值行数: 0
+          });
+        }
+        const item = map.get(date);
+        const spend = nonGrantSpend(row);
+        item.明细行数 += 1;
+        item.总非赠款消耗 += spend;
+        item.赠款消耗 += grantSpend(row);
+        if (isLocalPush(row)) {
+          item.本地推行数 += 1;
+          item.本地推非赠款消耗 += spend;
+          if (isOperation(row)) {
+            item.代运营行数 += 1;
+            item.本地推代运营非赠款消耗 += spend;
+          }
+          if (isRecharge(row)) {
+            item.代充值行数 += 1;
+            item.本地推代充值非赠款消耗 += spend;
+          }
+        }
+        if (isAd(row)) {
+          item.AD行数 += 1;
+          item.AD非赠款消耗 += spend;
+        }
+      }
+      return Array.from(map.values()).sort((a, b) => a.日期.localeCompare(b.日期));
     }
 
     function multiGroupDailySeries(rows, start, end, mode) {
@@ -1847,9 +1900,9 @@
       const quarterEnd = ref && ref < quarter.end ? ref : quarter.end;
       const monthEnd = ref && ref < month.end ? ref : month.end;
       const dayStart = addDays(day.start, -29);
-      renderLineChart(els.quarterTrend, [{ name: "本地推", data: dailySeries(state.rows, quarter.start, quarterEnd, isLocalPush) }], { title: "本季度本地推每日消耗趋势" });
-      renderLineChart(els.monthTrend, [{ name: "本地推", data: dailySeries(state.rows, month.start, monthEnd, isLocalPush) }], { title: "本月本地推每日消耗趋势" });
-      renderLineChart(els.dayTrend, [{ name: "本地推", data: dailySeries(state.rows, dayStart, day.end, isLocalPush) }], { title: "近30天本地推每日消耗趋势" });
+      renderLineChart(els.quarterTrend, [{ name: "本地推", data: dailySeries(state.allRows, quarter.start, quarterEnd, isLocalPush) }], { title: "本季度本地推每日消耗趋势" });
+      renderLineChart(els.monthTrend, [{ name: "本地推", data: dailySeries(state.allRows, month.start, monthEnd, isLocalPush) }], { title: "本月本地推每日消耗趋势" });
+      renderLineChart(els.dayTrend, [{ name: "本地推", data: dailySeries(state.allRows, dayStart, day.end, isLocalPush) }], { title: "近30天本地推每日消耗趋势" });
     }
 
     function topSpendBy(rows, field, limit = 20) {
@@ -2897,6 +2950,17 @@
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "当前筛选数据");
       XLSX.writeFile(workbook, `数据管理平台-当前筛选数据-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    });
+    els.exportAuditBtn.addEventListener("click", () => {
+      if (!state.allRows.length) {
+        toast("暂无可校验数据");
+        return;
+      }
+      const auditRows = dailyAuditRows();
+      const worksheet = XLSX.utils.json_to_sheet(auditRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "日度非赠款消耗校验");
+      XLSX.writeFile(workbook, `数据管理平台-日度校验-${new Date().toISOString().slice(0, 10)}.xlsx`);
     });
 
     async function boot() {
