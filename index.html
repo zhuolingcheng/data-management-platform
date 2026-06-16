@@ -2132,13 +2132,22 @@
     function rowKey(row) {
       return [
         rowDateValue(row),
-        row["账户ID"] || row["账户名称"],
+        row["账户ID"],
+        row["账户名称"],
         row["广告主主体"],
         row["商机名称"],
+        row["商务"],
+        row["事业部"],
+        row["BU"],
         row["端口ID"],
         row["媒体平台"],
         row["媒体端口"],
-        row["合作模式-DOSS"]
+        row["一级行业"],
+        row["二级行业"],
+        row["合作模式-DOSS"],
+        row["总消耗"],
+        row["非赠款消耗"],
+        row["赠款消耗"]
       ].map(normalizeText).join("|");
     }
 
@@ -2195,6 +2204,19 @@
 
     function dedupeRows(rows) {
       return mergeRowsInMemory([], rows);
+    }
+
+    function incomingDates(rows) {
+      return Array.from(new Set(rows.map(rowDateValue).filter(Boolean))).sort();
+    }
+
+    function replaceRowsByDates(existing, incoming) {
+      const dates = new Set(incomingDates(incoming));
+      const retained = existing.filter(row => {
+        const date = rowDateValue(row);
+        return !date || !dates.has(date);
+      });
+      return dedupeRows([...retained, ...incoming]);
     }
 
     function targetsFromCloud(rows) {
@@ -2529,6 +2551,15 @@
 
     async function upsertCloudConsumption(rows) {
       if (!state.cloud.enabled || !canCloudEdit()) return false;
+      const dates = incomingDates(rows);
+      for (let i = 0; i < dates.length; i += 20) {
+        els.dbStatus.textContent = `云端：正在替换旧日期数据 ${formatNumber(Math.min(i + 20, dates.length))}/${formatNumber(dates.length)} 天`;
+        const { error } = await state.cloud.client
+          .from("consumption_rows")
+          .delete()
+          .in("row_date", dates.slice(i, i + 20));
+        if (error) throw error;
+      }
       const batchSize = 500;
       for (let i = 0; i < rows.length; i += batchSize) {
         els.dbStatus.textContent = `云端：正在上传消耗数据 ${formatNumber(Math.min(i + batchSize, rows.length))}/${formatNumber(rows.length)} 行`;
@@ -2770,7 +2801,7 @@
       if (!file) return;
       const rows = (await parseDataFile(file)).map(enrichRow);
       const existingRows = state.allRows.slice();
-      const localMergedRows = mergeRowsInMemory(existingRows, rows);
+      const localMergedRows = replaceRowsByDates(existingRows, rows);
       setRows(localMergedRows, file.name);
       if (state.cloud.enabled && state.cloud.user) {
         if (!canCloudEdit()) {
@@ -2780,9 +2811,12 @@
         els.dbStatus.textContent = "云端：正在合并上传数据";
         try {
           await upsertCloudConsumption(rows);
-          const mergedRows = mergeRowsInMemory(existingRows, rows);
+          const mergedRows = replaceRowsByDates(existingRows, rows);
           setRows(mergedRows, "Supabase 云端数据库");
-          if (state.dbReady) await mergeRowsToDb(rows);
+          if (state.dbReady) {
+            await clearLocalRowsDb();
+            await mergeRowsToDb(mergedRows);
+          }
           await saveCloudDatasetSnapshot(mergedRows);
           els.dbStatus.textContent = `云端：已上传/合并 ${formatNumber(rows.length)} 行，当前显示 ${formatNumber(mergedRows.length)} 行`;
           toast(`${file.name} 已上传到云端`);
@@ -2795,8 +2829,9 @@
       }
       if (state.dbReady) {
         els.dbStatus.textContent = "数据库：正在合并上传数据";
-        await mergeRowsToDb(rows);
-        await refreshFromDb();
+        await clearLocalRowsDb();
+        await mergeRowsToDb(localMergedRows);
+        setRows(localMergedRows, "本地累计数据库");
       }
     });
     els.mappingInput.addEventListener("change", async event => {
