@@ -218,6 +218,52 @@
       font-size: 12px;
     }
 
+    .report-filter {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+    .filter-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .filter-head h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .filter-head span {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+    }
+    .filter-grid {
+      display: grid;
+      grid-template-columns: minmax(130px, .8fr) minmax(140px, .8fr) minmax(140px, .8fr) minmax(220px, 1.3fr) minmax(220px, 1.3fr) auto;
+      gap: 12px;
+      align-items: end;
+    }
+    .report-filter .field {
+      margin-bottom: 0;
+    }
+    .report-filter .field label {
+      color: var(--muted);
+    }
+    .report-filter .field input,
+    .report-filter .field select {
+      border-color: var(--line);
+      background: #fff;
+      color: var(--ink);
+    }
+    .report-filter .btn {
+      height: 36px;
+    }
+
     .report-section {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -532,12 +578,16 @@
       .cards { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
       .topbar { flex-direction: column; }
       .progress-card { min-width: 0; width: 100%; }
+      .filter-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
     }
     @media (max-width: 820px) {
       .app { display: block; }
       .sidebar { position: static; height: auto; }
       .main { padding: 14px; }
       .cards, .cards.three, .split, .triple, .target-form { grid-template-columns: 1fr; }
+      .filter-head { align-items: flex-start; flex-direction: column; }
+      .filter-head span { text-align: left; }
+      .filter-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -597,22 +647,6 @@
         <div class="side-note" id="cloudStatus">云端：未连接</div>
       </section>
 
-      <section class="side-section">
-        <h2>报表筛选</h2>
-        <div class="field">
-          <label for="monthFilter">月份</label>
-          <select id="monthFilter"></select>
-        </div>
-        <div class="field">
-          <label for="dateStart">开始日期</label>
-          <input type="date" id="dateStart">
-        </div>
-        <div class="field">
-          <label for="dateEnd">结束日期</label>
-          <input type="date" id="dateEnd">
-        </div>
-        <div class="side-note" id="filterStatus">筛选：全部数据</div>
-      </section>
     </aside>
 
     <main class="main">
@@ -632,6 +666,38 @@
           </div>
         </section>
       </header>
+
+      <section class="report-filter" aria-label="报表筛选">
+        <div class="filter-head">
+          <h3>报表筛选</h3>
+          <span id="filterStatus">筛选：全部数据</span>
+        </div>
+        <div class="filter-grid">
+          <div class="field">
+            <label for="monthFilter">月份</label>
+            <select id="monthFilter"></select>
+          </div>
+          <div class="field">
+            <label for="dateStart">开始日期</label>
+            <input type="date" id="dateStart">
+          </div>
+          <div class="field">
+            <label for="dateEnd">结束日期</label>
+            <input type="date" id="dateEnd">
+          </div>
+          <div class="field">
+            <label for="opportunityFilter">商机主体</label>
+            <input type="text" id="opportunityFilter" list="opportunityOptions" placeholder="全部商机主体">
+            <datalist id="opportunityOptions"></datalist>
+          </div>
+          <div class="field">
+            <label for="advertiserFilter">广告主主体</label>
+            <input type="text" id="advertiserFilter" list="advertiserOptions" placeholder="全部广告主主体">
+            <datalist id="advertiserOptions"></datalist>
+          </div>
+          <button class="btn" type="button" id="clearReportFiltersBtn">清空筛选</button>
+        </div>
+      </section>
 
       <section class="report-section" id="annualSection">
         <div class="section-head">
@@ -946,6 +1012,8 @@
       selectedMonth: "all",
       selectedStart: "",
       selectedEnd: "",
+      selectedOpportunity: "",
+      selectedAdvertiser: "",
       months: [],
       targets: {},
       targetYear: "",
@@ -990,6 +1058,11 @@
       monthFilter: document.getElementById("monthFilter"),
       dateStart: document.getElementById("dateStart"),
       dateEnd: document.getElementById("dateEnd"),
+      opportunityFilter: document.getElementById("opportunityFilter"),
+      advertiserFilter: document.getElementById("advertiserFilter"),
+      opportunityOptions: document.getElementById("opportunityOptions"),
+      advertiserOptions: document.getElementById("advertiserOptions"),
+      clearReportFiltersBtn: document.getElementById("clearReportFiltersBtn"),
       targetYearSelect: document.getElementById("targetYearSelect"),
       targetQuarterSelect: document.getElementById("targetQuarterSelect"),
       targetMonthSelect: document.getElementById("targetMonthSelect"),
@@ -1204,6 +1277,14 @@
       return `${normalizeText(opportunity)}||${normalizeText(advertiser)}`;
     }
 
+    function opportunitySubject(row) {
+      return row["商机主体"] ?? row["商机名称"] ?? row["商机"] ?? "";
+    }
+
+    function advertiserSubject(row) {
+      return row["广告主主体"] ?? row["广告主"] ?? row["客户主体"] ?? "";
+    }
+
     function lookupDirectChannel(row) {
       const value = state.mappingMap.get(mappingKey(row["商机名称"], row["广告主主体"]));
       return value ? { matched: true, value } : { matched: false, value: "未匹配" };
@@ -1271,6 +1352,8 @@
       state.selectedMonth = "all";
       state.selectedStart = "";
       state.selectedEnd = "";
+      state.selectedOpportunity = "";
+      state.selectedAdvertiser = "";
       configureFilters();
       applyFilters();
       render();
@@ -1287,7 +1370,21 @@
       els.dateEnd.max = dates[dates.length - 1] || "";
       els.dateStart.value = state.selectedStart;
       els.dateEnd.value = state.selectedEnd;
+      const opportunityOptions = Array.from(new Set(state.allRows.map(opportunitySubject).map(value => String(value || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"));
+      const advertiserOptions = Array.from(new Set(state.allRows.map(advertiserSubject).map(value => String(value || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"));
+      els.opportunityOptions.innerHTML = opportunityOptions.slice(0, 5000).map(value => `<option value="${escapeHtml(value)}"></option>`).join("");
+      els.advertiserOptions.innerHTML = advertiserOptions.slice(0, 5000).map(value => `<option value="${escapeHtml(value)}"></option>`).join("");
+      els.opportunityFilter.value = state.selectedOpportunity;
+      els.advertiserFilter.value = state.selectedAdvertiser;
       configureTargetPeriodOptions();
+    }
+
+    function matchesEntityFilters(row) {
+      const opportunityFilter = normalizeText(state.selectedOpportunity);
+      const advertiserFilter = normalizeText(state.selectedAdvertiser);
+      if (opportunityFilter && !normalizeText(opportunitySubject(row)).includes(opportunityFilter)) return false;
+      if (advertiserFilter && !normalizeText(advertiserSubject(row)).includes(advertiserFilter)) return false;
+      return true;
     }
 
     function applyFilters() {
@@ -1296,6 +1393,7 @@
         if (state.selectedMonth !== "all" && row["月份"] !== state.selectedMonth) return false;
         if (state.selectedStart && date && date < state.selectedStart) return false;
         if (state.selectedEnd && date && date > state.selectedEnd) return false;
+        if (!matchesEntityFilters(row)) return false;
         return true;
       });
     }
@@ -1479,6 +1577,8 @@
     function currentFilterLabel() {
       const parts = [state.selectedMonth === "all" ? "全部月份" : state.selectedMonth];
       if (state.selectedStart || state.selectedEnd) parts.push(`${state.selectedStart || "最早"} 至 ${state.selectedEnd || "最新"}`);
+      if (state.selectedOpportunity) parts.push(`商机主体：${state.selectedOpportunity}`);
+      if (state.selectedAdvertiser) parts.push(`广告主主体：${state.selectedAdvertiser}`);
       return parts.join(" · ");
     }
 
@@ -1930,7 +2030,7 @@
     }
 
     function newCustomerItems(month, currentEnd) {
-      const currentRows = periodRows(month.start, currentEnd, state.allRows);
+      const currentRows = periodRows(month.start, currentEnd);
       const currentReps = subjectRepresentatives(currentRows);
       let newKeys;
       if (month.label === "2026-01") {
@@ -1938,10 +2038,13 @@
       } else {
         const previousRows = state.allRows.filter(row => {
           const date = rowDateValue(row);
-          return date && date < month.start;
+          return date && date < month.start && matchesEntityFilters(row);
         });
         const previousKeys = new Set(previousRows.map(customerSubjectKey).filter(Boolean));
         newKeys = new Set(Array.from(currentReps.keys()).filter(key => !previousKeys.has(key)));
+      }
+      if (state.selectedOpportunity || state.selectedAdvertiser) {
+        newKeys = new Set(Array.from(newKeys).filter(key => currentReps.has(key)));
       }
       return Array.from(newKeys).map(key => {
         const rep = currentReps.get(key);
@@ -2021,9 +2124,9 @@
       const quarterEnd = ref && ref < quarter.end ? ref : quarter.end;
       const monthEnd = ref && ref < month.end ? ref : month.end;
       const dayStart = addDays(day.start, -29);
-      renderLineChart(els.quarterTrend, [{ name: "本地推", data: dailySeries(state.allRows, quarter.start, quarterEnd, isLocalPush) }], { title: "本季度本地推每日消耗趋势" });
-      renderLineChart(els.monthTrend, [{ name: "本地推", data: dailySeries(state.allRows, month.start, monthEnd, isLocalPush) }], { title: "本月本地推每日消耗趋势" });
-      renderLineChart(els.dayTrend, [{ name: "本地推", data: dailySeries(state.allRows, dayStart, day.end, isLocalPush) }], { title: "近30天本地推每日消耗趋势" });
+      renderLineChart(els.quarterTrend, [{ name: "本地推", data: dailySeries(state.rows, quarter.start, quarterEnd, isLocalPush) }], { title: "本季度本地推每日消耗趋势" });
+      renderLineChart(els.monthTrend, [{ name: "本地推", data: dailySeries(state.rows, month.start, monthEnd, isLocalPush) }], { title: "本月本地推每日消耗趋势" });
+      renderLineChart(els.dayTrend, [{ name: "本地推", data: dailySeries(state.rows, dayStart, day.end, isLocalPush) }], { title: "近30天本地推每日消耗趋势" });
     }
 
     function topSpendBy(rows, field, limit = 20) {
@@ -2900,6 +3003,8 @@
       state.selectedMonth = "all";
       state.selectedStart = "";
       state.selectedEnd = "";
+      state.selectedOpportunity = "";
+      state.selectedAdvertiser = "";
       state.fileName = "历史数据已清空";
       localStorage.removeItem("dmp.cloudSnapshotVersion");
       configureFilters();
@@ -2963,6 +3068,21 @@
       }
       setRows(rows, "本地累计数据库");
       els.dbStatus.textContent = `数据库：已累计 ${formatNumber(rows.length)} 行`;
+    }
+
+    function refreshReportFilters() {
+      applyFilters();
+      render();
+    }
+
+    let textFilterTimer = null;
+    function refreshTextFiltersSoon() {
+      clearTimeout(textFilterTimer);
+      textFilterTimer = setTimeout(() => {
+        state.selectedOpportunity = els.opportunityFilter.value.trim();
+        state.selectedAdvertiser = els.advertiserFilter.value.trim();
+        refreshReportFilters();
+      }, 180);
     }
 
     els.uploadBtn.addEventListener("click", () => els.dataInput.click());
@@ -3062,15 +3182,30 @@
     });
     els.monthFilter.addEventListener("change", () => {
       state.selectedMonth = els.monthFilter.value;
-      applyFilters();
-      render();
+      refreshReportFilters();
     });
     [els.dateStart, els.dateEnd].forEach(input => input.addEventListener("change", () => {
       state.selectedStart = els.dateStart.value;
       state.selectedEnd = els.dateEnd.value;
-      applyFilters();
-      render();
+      refreshReportFilters();
     }));
+    [els.opportunityFilter, els.advertiserFilter].forEach(input => {
+      input.addEventListener("input", refreshTextFiltersSoon);
+      input.addEventListener("change", () => {
+        state.selectedOpportunity = els.opportunityFilter.value.trim();
+        state.selectedAdvertiser = els.advertiserFilter.value.trim();
+        refreshReportFilters();
+      });
+    });
+    els.clearReportFiltersBtn.addEventListener("click", () => {
+      state.selectedMonth = "all";
+      state.selectedStart = "";
+      state.selectedEnd = "";
+      state.selectedOpportunity = "";
+      state.selectedAdvertiser = "";
+      configureFilters();
+      refreshReportFilters();
+    });
     els.exportBtn.addEventListener("click", () => {
       if (!state.rows.length) {
         toast("当前筛选范围暂无可导出数据");
