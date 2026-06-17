@@ -2775,13 +2775,18 @@
         state.cloud.role = "";
         return;
       }
-      const { data, error } = await state.cloud.client
-        .from("team_members")
-        .select("role")
-        .eq("email", email.toLowerCase())
-        .maybeSingle();
-      if (error) throw error;
-      state.cloud.role = data?.role || "";
+      try {
+        const { data, error } = await state.cloud.client
+          .from("team_members")
+          .select("role")
+          .eq("email", email.toLowerCase())
+          .maybeSingle();
+        if (error) throw error;
+        state.cloud.role = data?.role || "viewer";
+      } catch (error) {
+        state.cloud.role = "viewer";
+        toast(`未读取到团队角色，已按查看权限进入：${error.message || error}`);
+      }
     }
 
     async function cloudSignIn() {
