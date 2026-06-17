@@ -2533,6 +2533,17 @@
       return true;
     }
 
+    async function loadCloudTargetsSafely() {
+      try {
+        await loadCloudTargets();
+        return true;
+      } catch (error) {
+        renderTargetStatus();
+        toast(`目标数据读取失败，已继续读取报表数据：${error.message || error}`);
+        return false;
+      }
+    }
+
     async function getCloudConsumptionCount() {
       if (!state.cloud.enabled || !state.cloud.user) return null;
       const { count, error } = await state.cloud.client
@@ -2659,15 +2670,19 @@
     }
 
     async function syncCloudDataIfNeeded() {
-      const snapshotMeta = await getCloudSnapshotMeta();
-      if (snapshotMeta?.version && Number(snapshotMeta.row_count) > 0) {
-        const localVersion = localStorage.getItem("dmp.cloudSnapshotVersion") || "";
-        if (state.allRows.length === Number(snapshotMeta.row_count) && localVersion === snapshotMeta.version) {
-          els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，已是最新快照`;
+      try {
+        const snapshotMeta = await getCloudSnapshotMeta();
+        if (snapshotMeta?.version && Number(snapshotMeta.row_count) > 0) {
+          const localVersion = localStorage.getItem("dmp.cloudSnapshotVersion") || "";
+          if (state.allRows.length === Number(snapshotMeta.row_count) && localVersion === snapshotMeta.version) {
+            els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，已是最新快照`;
+            return;
+          }
+          await loadCloudSnapshot(snapshotMeta);
           return;
         }
-        await loadCloudSnapshot(snapshotMeta);
-        return;
+      } catch (error) {
+        els.dbStatus.textContent = `云端：快照读取失败，正在改读明细数据`;
       }
       const cloudCount = await getCloudConsumptionCount();
       if (!Number.isFinite(cloudCount)) return;
@@ -2698,12 +2713,18 @@
       state.cloud.loading = true;
       els.dbStatus.textContent = "云端：正在读取数据";
       try {
-        const targetRows = await fetchAllCloudRows("targets", "target_key,period_key,value", { label: "目标", loadId });
+        try {
+          const targetRows = await fetchAllCloudRows("targets", "target_key,period_key,value", { label: "目标", loadId });
+          if (loadId !== state.cloud.loadId) return;
+          state.targets = sanitizeTargets(targetsFromCloud(targetRows));
+          localStorage.setItem("dmp.targets", JSON.stringify(state.targets));
+          fillTargetForm();
+          renderTargetStatus();
+        } catch (targetError) {
+          renderTargetStatus();
+          toast(`目标数据读取失败，已继续读取报表数据：${targetError.message || targetError}`);
+        }
         if (loadId !== state.cloud.loadId) return;
-        state.targets = sanitizeTargets(targetsFromCloud(targetRows));
-        localStorage.setItem("dmp.targets", JSON.stringify(state.targets));
-        fillTargetForm();
-        renderTargetStatus();
         const dataRows = await fetchAllCloudRows("consumption_rows", "row_key,row_date,payload,uploaded_at", { label: "消耗数据", loadId });
         if (loadId !== state.cloud.loadId) return;
         const payloads = dataRows
@@ -2782,11 +2803,7 @@
       state.cloud.user = data.user;
       await loadCloudRole();
       updateCloudUi();
-      try {
-        await loadCloudTargets();
-      } catch (error) {
-        toast(`目标数据同步失败：${error.message || error}`);
-      }
+      await loadCloudTargetsSafely();
       await syncCloudDataIfNeeded();
       toast("已登录云端");
     }
@@ -2815,7 +2832,7 @@
         try {
           await loadCloudRole();
           updateCloudUi();
-          await loadCloudTargets();
+          await loadCloudTargetsSafely();
           await syncCloudDataIfNeeded();
         } catch (error) {
           toast(`云端初始化失败：${error.message || error}`);
@@ -2827,7 +2844,7 @@
         if (state.cloud.user) {
           try {
             await loadCloudRole();
-            await loadCloudTargets();
+            await loadCloudTargetsSafely();
             await syncCloudDataIfNeeded();
           } catch (error) {
             toast(`云端同步失败：${error.message || error}`);
