@@ -156,6 +156,11 @@
     .cloud-sync-action {
       margin-top: 10px;
     }
+    .app.viewer-mode #targetPageBtn,
+    .app.viewer-mode #dataImportSection,
+    .app.viewer-mode #cloudReloadBtn {
+      display: none;
+    }
     .file-input { display: none; }
 
     .main {
@@ -612,7 +617,7 @@
         </div>
       </section>
 
-      <section class="side-section">
+      <section class="side-section" id="dataImportSection">
         <h2>数据导入与导出</h2>
         <div class="side-grid">
           <button class="btn primary" type="button" id="uploadBtn">上传消耗数据</button>
@@ -1033,6 +1038,7 @@
     };
 
     const els = {
+      app: document.querySelector(".app"),
       dataInput: document.getElementById("dataInput"),
       mappingInput: document.getElementById("mappingInput"),
       uploadBtn: document.getElementById("uploadBtn"),
@@ -1541,6 +1547,7 @@
     }
 
     function showPage(page) {
+      if (page === "target" && state.cloud.user && !canCloudEdit()) page = "report";
       const isTarget = page === "target";
       els.reportView.classList.toggle("is-hidden", isTarget);
       els.targetView.classList.toggle("is-hidden", !isTarget);
@@ -2451,6 +2458,8 @@
       const roleText = state.cloud.role ? `，权限：${state.cloud.role}` : "";
       els.cloudStatus.textContent = email ? `云端：已登录 ${email}${roleText}` : "云端：未登录";
       const locked = Boolean(state.cloud.user) && !canCloudEdit();
+      els.app.classList.toggle("viewer-mode", locked);
+      if (locked && !els.targetView.classList.contains("is-hidden")) showPage("report");
       [els.uploadBtn, els.mappingBtn, els.reloadDbBtn, els.clearHistoryBtn, els.cloudReloadBtn, els.saveTargetsBtn, els.clearTargetsBtn].forEach(button => {
         button.disabled = locked;
         button.title = locked ? "当前账号只有查看权限，无法操作数据同步" : "";
