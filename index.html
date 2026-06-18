@@ -1620,6 +1620,13 @@
       });
     }
 
+    function comparablePeriodRows(start, end) {
+      return state.allRows.filter(row => {
+        const date = rowDateValue(row);
+        return date && date >= start && date <= end && matchesEntityFilters(row);
+      });
+    }
+
     function addDays(dateValue, days) {
       const date = dateFromString(dateValue);
       date.setDate(date.getDate() + days);
@@ -1769,7 +1776,7 @@
     function localAverageDailyCard(bounds, currentEnd, previousRows) {
       const currentRows = periodRows(bounds.start, currentEnd);
       const previousBounds = previousComparableBounds(bounds, "month");
-      const previousFullRows = periodRows(previousBounds.start, previousBounds.end);
+      const previousFullRows = comparablePeriodRows(previousBounds.start, previousBounds.end);
       const currentValue = averageDaily(currentRows, bounds.start, currentEnd, isLocalPush);
       const previousValue = averageDaily(previousFullRows, previousBounds.start, previousBounds.end, isLocalPush);
       return { label: "本地推平均日耗", value: currentValue, delta: ratio(currentValue, previousValue), compareLabel: "较上月整月日均" };
@@ -1789,7 +1796,7 @@
         start: previousBounds.start,
         end: previousEnd < previousBounds.end ? previousEnd : previousBounds.end
       };
-      const previousRows = periodRows(previous.start, previous.end);
+      const previousRows = comparablePeriodRows(previous.start, previous.end);
       tag.textContent = `${bounds.label} · 截至 ${currentEnd} · 对比 ${previous.start} 至 ${previous.end}`;
       const cards = periodMetrics(currentRows, previousRows);
       applyPeriodTargets(cards, periodType, bounds);
@@ -2186,7 +2193,7 @@
       const groups = ["商务一组", "商务二组"];
       const cards = [];
       const previousBounds = previousComparableBounds(month, "month");
-      const previousFullMonthRows = periodRows(previousBounds.start, previousBounds.end).filter(row => isLocalPush(row) && isMode(row, mode));
+      const previousFullMonthRows = comparablePeriodRows(previousBounds.start, previousBounds.end).filter(row => isLocalPush(row) && isMode(row, mode));
       const modeTargetKey = mode === "代运营" ? "monthOperation" : "monthRecharge";
       const currentMonthTotal = sumNonGrant(currentMonthRows);
       const previousMonthTotal = sumNonGrant(previousMonthRows);
@@ -2242,7 +2249,7 @@
         start: previousBounds.start,
         end: previousEnd < previousBounds.end ? previousEnd : previousBounds.end
       };
-      return periodRows(previous.start, previous.end);
+      return comparablePeriodRows(previous.start, previous.end);
     }
 
     function spendByBusiness(rows) {
@@ -2285,7 +2292,7 @@
       const currentEnd = endDate && endDate < bounds.end ? endDate : bounds.end;
       const previousBounds = previousComparableBounds(bounds, periodType);
       const previousEnd = addDays(previousBounds.start, elapsedDays(bounds.start, currentEnd) - 1);
-      return periodRows(previousBounds.start, previousEnd < previousBounds.end ? previousEnd : previousBounds.end);
+      return comparablePeriodRows(previousBounds.start, previousEnd < previousBounds.end ? previousEnd : previousBounds.end);
     }
 
     function renderIndustryTable(container, bounds, periodType, endDate, compareLabel) {
