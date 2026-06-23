@@ -2633,6 +2633,10 @@
         const chunks = await fetchCloudSnapshotChunks(snapshotMeta, loadId);
         if (loadId !== state.cloud.loadId) return true;
         const rows = chunks.flatMap(chunk => Array.isArray(chunk.payload) ? chunk.payload : []).map(enrichRow);
+        if (rows.length !== Number(snapshotMeta.row_count)) {
+          els.dbStatus.textContent = `云端：快照行数异常（快照 ${formatNumber(snapshotMeta.row_count)} 行，实际 ${formatNumber(rows.length)} 行），正在改读明细`;
+          return false;
+        }
         if (rows.length) {
           setRows(rows, "Supabase 云端快照");
           if (state.dbReady) {
@@ -2701,32 +2705,42 @@
     }
 
     async function syncCloudDataIfNeeded() {
+      let cloudCount = null;
+      try {
+        cloudCount = await getCloudConsumptionCount();
+      } catch (error) {
+        els.dbStatus.textContent = `云端：明细行数读取失败，正在尝试读取快照`;
+      }
       try {
         const snapshotMeta = await getCloudSnapshotMeta();
         if (snapshotMeta?.version && Number(snapshotMeta.row_count) > 0) {
-          const cloudCount = await getCloudConsumptionCount();
-          if (Number.isFinite(cloudCount) && cloudCount > Number(snapshotMeta.row_count)) {
-            els.dbStatus.textContent = `云端：明细 ${formatNumber(cloudCount)} 行多于快照 ${formatNumber(snapshotMeta.row_count)} 行，正在读取完整明细`;
+          const snapshotCount = Number(snapshotMeta.row_count);
+          const snapshotVersion = String(snapshotMeta.version || "");
+          const versionMatches = snapshotVersion.startsWith(`${SNAPSHOT_SCHEMA_VERSION}-`);
+          const countMatches = !Number.isFinite(cloudCount) || cloudCount === snapshotCount;
+          if (versionMatches && countMatches) {
+            const loaded = await loadCloudSnapshot(snapshotMeta);
+            if (loaded) return;
             await loadCloudData();
             return;
           }
-          if (!String(snapshotMeta.version || "").startsWith(`${SNAPSHOT_SCHEMA_VERSION}-`)) {
+          if (Number.isFinite(cloudCount) && cloudCount !== snapshotCount) {
+            els.dbStatus.textContent = `云端：明细 ${formatNumber(cloudCount)} 行与快照 ${formatNumber(snapshotCount)} 行不一致，正在读取完整明细并重建快照`;
+            await loadCloudData();
+            return;
+          }
+          if (!versionMatches) {
             els.dbStatus.textContent = "云端：检测到旧版快照，正在读取完整明细并重建快照";
             await loadCloudData();
             return;
           }
-          const localVersion = localStorage.getItem("dmp.cloudSnapshotVersion") || "";
-          if (state.allRows.length === Number(snapshotMeta.row_count) && localVersion === snapshotMeta.version) {
-            els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，已是最新快照`;
-            return;
-          }
-          await loadCloudSnapshot(snapshotMeta);
-          return;
         }
       } catch (error) {
         els.dbStatus.textContent = `云端：快照读取失败，正在改读明细数据`;
       }
-      const cloudCount = await getCloudConsumptionCount();
+      if (!Number.isFinite(cloudCount)) {
+        cloudCount = await getCloudConsumptionCount();
+      }
       if (!Number.isFinite(cloudCount)) return;
       if (cloudCount === 0) {
         if (state.allRows.length) {
@@ -2736,12 +2750,8 @@
         els.dbStatus.textContent = "云端：暂无消耗数据，请重新上传";
         return;
       }
-      if (state.allRows.length !== cloudCount) {
-        els.dbStatus.textContent = `云端：检测到 ${formatNumber(cloudCount)} 行，本地缓存 ${formatNumber(state.allRows.length)} 行，正在同步`;
-        await loadCloudData();
-        return;
-      }
-      els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，云端行数一致`;
+      els.dbStatus.textContent = `云端：正在读取完整明细 ${formatNumber(cloudCount)} 行`;
+      await loadCloudData();
     }
 
     async function loadCloudData() {
@@ -2780,7 +2790,10 @@
           .map(enrichRow);
         if (payloads.length) {
           setRows(payloads, "Supabase 云端数据库");
-          if (state.dbReady) await mergeRowsToDb(payloads);
+          if (state.dbReady) {
+            await clearLocalRowsDb();
+            await mergeRowsToDb(payloads);
+          }
           if (canCloudEdit()) await saveCloudDatasetSnapshot(payloads);
           els.dbStatus.textContent = `云端：已同步并缓存 ${formatNumber(payloads.length)} 行`;
         } else {
