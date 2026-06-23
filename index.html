@@ -1009,7 +1009,7 @@
   <script src="./consumption-detail-data.js"></script>
   <script src="./direct-channel-mapping-data.js"></script>
   <script>
-    const SNAPSHOT_SCHEMA_VERSION = "datefix2";
+    const SNAPSHOT_SCHEMA_VERSION = "datefix3";
 
     const state = {
       allRows: [],
@@ -2625,6 +2625,7 @@
     async function loadCloudSnapshot(meta = null) {
       const snapshotMeta = meta || await getCloudSnapshotMeta();
       if (!snapshotMeta?.version || !Number(snapshotMeta.row_count)) return false;
+      if (!String(snapshotMeta.version || "").startsWith(`${SNAPSHOT_SCHEMA_VERSION}-`)) return false;
       const loadId = state.cloud.loadId + 1;
       state.cloud.loadId = loadId;
       state.cloud.loading = true;
@@ -2709,7 +2710,7 @@
             await loadCloudData();
             return;
           }
-          if (canCloudEdit() && !String(snapshotMeta.version || "").startsWith(`${SNAPSHOT_SCHEMA_VERSION}-`)) {
+          if (!String(snapshotMeta.version || "").startsWith(`${SNAPSHOT_SCHEMA_VERSION}-`)) {
             els.dbStatus.textContent = "云端：检测到旧版快照，正在读取完整明细并重建快照";
             await loadCloudData();
             return;
