@@ -2689,6 +2689,12 @@
       try {
         const snapshotMeta = await getCloudSnapshotMeta();
         if (snapshotMeta?.version && Number(snapshotMeta.row_count) > 0) {
+          const cloudCount = await getCloudConsumptionCount();
+          if (Number.isFinite(cloudCount) && cloudCount > Number(snapshotMeta.row_count)) {
+            els.dbStatus.textContent = `云端：明细 ${formatNumber(cloudCount)} 行多于快照 ${formatNumber(snapshotMeta.row_count)} 行，正在读取完整明细`;
+            await loadCloudData();
+            return;
+          }
           const localVersion = localStorage.getItem("dmp.cloudSnapshotVersion") || "";
           if (state.allRows.length === Number(snapshotMeta.row_count) && localVersion === snapshotMeta.version) {
             els.dbStatus.textContent = `数据库：使用本地缓存 ${formatNumber(state.allRows.length)} 行，已是最新快照`;
@@ -2783,6 +2789,15 @@
       const snapshotLoaded = await loadCloudSnapshot();
       if (snapshotLoaded) return;
       await loadCloudData();
+    }
+
+    async function ensureCloudRowsLoadedForUpload() {
+      if (!state.cloud.enabled || !state.cloud.user || !canCloudEdit()) return;
+      const cloudCount = await getCloudConsumptionCount();
+      if (Number.isFinite(cloudCount) && cloudCount > 0 && state.allRows.length < cloudCount) {
+        els.dbStatus.textContent = `云端：上传前正在加载完整历史数据 ${formatNumber(state.allRows.length)}/${formatNumber(cloudCount)} 行`;
+        await loadCloudData();
+      }
     }
 
     async function loadCloudRole() {
@@ -3163,9 +3178,6 @@
       const file = event.target.files[0];
       if (!file) return;
       const rows = prepareUploadedRows(await parseDataFile(file), file.name);
-      const existingRows = state.allRows.slice();
-      const localMergedRows = replaceRowsByDates(existingRows, rows);
-      setRows(localMergedRows, file.name);
       if (state.cloud.enabled && state.cloud.user) {
         if (!canCloudEdit()) {
           toast("当前账号没有上传权限");
@@ -3173,6 +3185,8 @@
         }
         els.dbStatus.textContent = "云端：正在合并上传数据";
         try {
+          await ensureCloudRowsLoadedForUpload();
+          const existingRows = state.allRows.slice();
           await upsertCloudConsumption(rows);
           const mergedRows = replaceRowsByDates(existingRows, rows);
           setRows(mergedRows, "Supabase 云端数据库");
@@ -3190,6 +3204,9 @@
         }
         return;
       }
+      const existingRows = state.allRows.slice();
+      const localMergedRows = replaceRowsByDates(existingRows, rows);
+      setRows(localMergedRows, file.name);
       if (state.dbReady) {
         els.dbStatus.textContent = "数据库：正在合并上传数据";
         await clearLocalRowsDb();
