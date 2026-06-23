@@ -1009,6 +1009,8 @@
   <script src="./consumption-detail-data.js"></script>
   <script src="./direct-channel-mapping-data.js"></script>
   <script>
+    const SNAPSHOT_SCHEMA_VERSION = "datefix2";
+
     const state = {
       allRows: [],
       rows: [],
@@ -1274,10 +1276,10 @@
     }
 
     function rowDateValue(row) {
-      const parsed = parseDateLike(sourceDateValue(row));
-      if (parsed) return parsed;
       const stored = String(row["__标准日期"] || row.row_date || "").trim();
       if (/^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored;
+      const parsed = parseDateLike(sourceDateValue(row));
+      if (parsed) return parsed;
       return "";
     }
 
@@ -2652,7 +2654,7 @@
     async function saveCloudDatasetSnapshot(rows) {
       if (!state.cloud.enabled || !canCloudEdit() || !rows.length) return false;
       rows = rows.map(enrichRow);
-      const version = `${Date.now()}-${hashString(`${rows.length}|${rowKey(rows[0])}|${rowKey(rows[rows.length - 1])}`)}`;
+      const version = `${SNAPSHOT_SCHEMA_VERSION}-${Date.now()}-${hashString(`${rows.length}|${rowKey(rows[0])}|${rowKey(rows[rows.length - 1])}`)}`;
       const chunkSize = 500;
       const chunks = [];
       for (let i = 0; i < rows.length; i += chunkSize) {
@@ -2704,6 +2706,11 @@
           const cloudCount = await getCloudConsumptionCount();
           if (Number.isFinite(cloudCount) && cloudCount > Number(snapshotMeta.row_count)) {
             els.dbStatus.textContent = `云端：明细 ${formatNumber(cloudCount)} 行多于快照 ${formatNumber(snapshotMeta.row_count)} 行，正在读取完整明细`;
+            await loadCloudData();
+            return;
+          }
+          if (canCloudEdit() && !String(snapshotMeta.version || "").startsWith(`${SNAPSHOT_SCHEMA_VERSION}-`)) {
+            els.dbStatus.textContent = "云端：检测到旧版快照，正在读取完整明细并重建快照";
             await loadCloudData();
             return;
           }
