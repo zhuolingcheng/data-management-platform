@@ -1009,7 +1009,7 @@
   <script src="./consumption-detail-data.js"></script>
   <script src="./direct-channel-mapping-data.js"></script>
   <script>
-    const SNAPSHOT_SCHEMA_VERSION = "datefix4";
+    const SNAPSHOT_SCHEMA_VERSION = "datefix5";
 
     const state = {
       allRows: [],
@@ -2496,10 +2496,13 @@
         if (options.label) {
           els.dbStatus.textContent = `云端：正在读取${options.label}，已读取 ${formatNumber(result.length)} 行`;
         }
-        const { data, error } = await state.cloud.client
+        let query = state.cloud.client
           .from(table)
-          .select(columns)
-          .range(from, from + pageSize - 1);
+          .select(columns);
+        if (options.orderBy) {
+          query = query.order(options.orderBy, { ascending: options.ascending !== false });
+        }
+        const { data, error } = await query.range(from, from + pageSize - 1);
         if (error) throw error;
         result.push(...(data || []));
         if (!data || data.length < pageSize) break;
@@ -2595,6 +2598,18 @@
       return count;
     }
 
+    async function getCloudLatestRowDate() {
+      if (!state.cloud.enabled || !state.cloud.user) return "";
+      const { data, error } = await state.cloud.client
+        .from("consumption_rows")
+        .select("row_date")
+        .not("row_date", "is", null)
+        .order("row_date", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return data?.[0]?.row_date || "";
+    }
+
     function isCloudSnapshotMissing(error) {
       const message = error?.message || String(error || "");
       return /dataset_meta|dataset_chunks|schema cache|relation|does not exist/i.test(message);
@@ -2634,7 +2649,7 @@
       return chunks;
     }
 
-    async function loadCloudSnapshot(meta = null) {
+    async function loadCloudSnapshot(meta = null, options = {}) {
       const snapshotMeta = meta || await getCloudSnapshotMeta();
       if (!snapshotMeta?.version || !Number(snapshotMeta.row_count)) return false;
       if (!String(snapshotMeta.version || "").startsWith(`${SNAPSHOT_SCHEMA_VERSION}-`)) return false;
@@ -2647,6 +2662,11 @@
         const rows = chunks.flatMap(chunk => Array.isArray(chunk.payload) ? chunk.payload : []).map(enrichRow);
         if (rows.length !== Number(snapshotMeta.row_count)) {
           els.dbStatus.textContent = `云端：快照行数异常（快照 ${formatNumber(snapshotMeta.row_count)} 行，实际 ${formatNumber(rows.length)} 行），正在改读明细`;
+          return false;
+        }
+        const snapshotLatestDate = latestDate(rows);
+        if (options.expectedLatestDate && snapshotLatestDate !== options.expectedLatestDate) {
+          els.dbStatus.textContent = `云端：快照日期落后（快照截至 ${snapshotLatestDate || "无日期"}，明细截至 ${options.expectedLatestDate}），正在改读完整明细`;
           return false;
         }
         if (rows.length) {
@@ -2718,8 +2738,10 @@
 
     async function syncCloudDataIfNeeded() {
       let cloudCount = null;
+      let cloudLatestDate = "";
       try {
         cloudCount = await getCloudConsumptionCount();
+        cloudLatestDate = await getCloudLatestRowDate();
       } catch (error) {
         els.dbStatus.textContent = `云端：明细行数读取失败，正在尝试读取快照`;
       }
@@ -2731,7 +2753,7 @@
           const versionMatches = snapshotVersion.startsWith(`${SNAPSHOT_SCHEMA_VERSION}-`);
           const countMatches = !Number.isFinite(cloudCount) || cloudCount === snapshotCount;
           if (versionMatches && countMatches) {
-            const loaded = await loadCloudSnapshot(snapshotMeta);
+            const loaded = await loadCloudSnapshot(snapshotMeta, { expectedLatestDate: cloudLatestDate });
             if (loaded) return;
             await loadCloudData();
             return;
@@ -2778,7 +2800,7 @@
       els.dbStatus.textContent = "云端：正在读取数据";
       try {
         try {
-          const targetRows = await fetchAllCloudRows("targets", "target_key,period_key,value", { label: "目标", loadId });
+          const targetRows = await fetchAllCloudRows("targets", "target_key,period_key,value", { label: "目标", loadId, orderBy: "target_key" });
           if (loadId !== state.cloud.loadId) return;
           state.targets = sanitizeTargets(targetsFromCloud(targetRows));
           localStorage.setItem("dmp.targets", JSON.stringify(state.targets));
@@ -2789,7 +2811,7 @@
           toast(`目标数据读取失败，已继续读取报表数据：${targetError.message || targetError}`);
         }
         if (loadId !== state.cloud.loadId) return;
-        const dataRows = await fetchAllCloudRows("consumption_rows", "row_key,row_date,payload,uploaded_at", { label: "消耗数据", loadId });
+        const dataRows = await fetchAllCloudRows("consumption_rows", "row_key,row_date,payload,uploaded_at", { label: "消耗数据", loadId, orderBy: "row_key" });
         if (loadId !== state.cloud.loadId) return;
         const payloads = dataRows
           .sort((a, b) => String(a.uploaded_at || "").localeCompare(String(b.uploaded_at || "")))
