@@ -1009,7 +1009,7 @@
   <script src="./consumption-detail-data.js"></script>
   <script src="./direct-channel-mapping-data.js"></script>
   <script>
-    const SNAPSHOT_SCHEMA_VERSION = "datefix3";
+    const SNAPSHOT_SCHEMA_VERSION = "datefix4";
 
     const state = {
       allRows: [],
@@ -1243,11 +1243,12 @@
     }
 
     function sourceDateValue(row) {
+      const column = sourceDateColumn(row);
+      if (column && String(row[column] ?? "").trim() !== "") return row[column];
       if (Object.prototype.hasOwnProperty.call(row, "__首列日期原值") && String(row["__首列日期原值"] ?? "").trim() !== "") {
         return row["__首列日期原值"];
       }
-      const column = sourceDateColumn(row);
-      return column ? row[column] : "";
+      return "";
     }
 
     function parseDateLike(value) {
@@ -1276,10 +1277,10 @@
     }
 
     function rowDateValue(row) {
-      const stored = String(row["__标准日期"] || row.row_date || "").trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored;
       const parsed = parseDateLike(sourceDateValue(row));
       if (parsed) return parsed;
+      const stored = String(row["__标准日期"] || row.row_date || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored;
       return "";
     }
 
