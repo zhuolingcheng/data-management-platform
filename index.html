@@ -2510,6 +2510,17 @@
       return Array.from(new Set(rows.map(rowDateValue).filter(Boolean))).sort();
     }
 
+    function invalidDateRows(rows) {
+      return rows
+        .map((row, index) => ({
+          index,
+          row,
+          sourceLine: row["__源文件行号"] || index + 1,
+          sourceDate: sourceDateValue(row)
+        }))
+        .filter(item => !rowDateValue(item.row));
+    }
+
     function replaceRowsByDates(existing, incoming) {
       const dates = new Set(incomingDates(incoming));
       const retained = existing.filter(row => {
@@ -2927,6 +2938,11 @@
 
     async function upsertCloudConsumption(rows) {
       if (!state.cloud.enabled || !canCloudEdit()) return false;
+      const invalidRows = invalidDateRows(rows);
+      if (invalidRows.length) {
+        const samples = invalidRows.slice(0, 5).map(item => `第${item.sourceLine}行：${String(item.sourceDate || "空值")}`).join("；");
+        throw new Error(`上传文件有 ${formatNumber(invalidRows.length)} 行未识别到首列日期，已停止上传。请先修正日期列。示例：${samples}`);
+      }
       const dates = incomingDates(rows);
       if (!dates.length) throw new Error("未识别到上传文件首列日期，请检查第一列是否为有效日期");
       await invalidateCloudSnapshot();
@@ -3304,7 +3320,13 @@
         toast("当前筛选范围暂无可导出数据");
         return;
       }
-      const exportRows = state.rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => !key.startsWith("__"))));
+      const exportRows = state.rows.map(row => ({
+        "标准日期": rowDateValue(row),
+        "日期识别状态": rowDateValue(row) ? "正常" : "未识别",
+        "源文件名": row["__源文件名"] || "",
+        "源文件行号": row["__源文件行号"] || "",
+        ...Object.fromEntries(Object.entries(row).filter(([key]) => !key.startsWith("__")))
+      }));
       const worksheet = XLSX.utils.json_to_sheet(exportRows);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "当前筛选数据");
