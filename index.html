@@ -2827,8 +2827,8 @@
     async function ensureCloudRowsLoadedForUpload() {
       if (!state.cloud.enabled || !state.cloud.user || !canCloudEdit()) return;
       const cloudCount = await getCloudConsumptionCount();
-      if (Number.isFinite(cloudCount) && cloudCount > 0 && state.allRows.length < cloudCount) {
-        els.dbStatus.textContent = `云端：上传前正在加载完整历史数据 ${formatNumber(state.allRows.length)}/${formatNumber(cloudCount)} 行`;
+      if (Number.isFinite(cloudCount) && cloudCount > 0) {
+        els.dbStatus.textContent = `云端：上传前正在校验完整历史数据 ${formatNumber(cloudCount)} 行`;
         await loadCloudData();
       }
     }
@@ -2928,6 +2928,8 @@
     async function upsertCloudConsumption(rows) {
       if (!state.cloud.enabled || !canCloudEdit()) return false;
       const dates = incomingDates(rows);
+      if (!dates.length) throw new Error("未识别到上传文件首列日期，请检查第一列是否为有效日期");
+      await invalidateCloudSnapshot();
       const removedRows = await deleteCloudConsumptionDates(dates);
       if (removedRows) els.dbStatus.textContent = `云端：已删除旧日期明细 ${formatNumber(removedRows)} 行，准备上传新数据`;
       const batchSize = 500;
@@ -2945,6 +2947,17 @@
         if (error) throw error;
       }
       return true;
+    }
+
+    async function invalidateCloudSnapshot() {
+      if (!state.cloud.enabled || !canCloudEdit()) return;
+      try {
+        await state.cloud.client.from("dataset_meta").delete().eq("dataset_key", "consumption_rows");
+        await state.cloud.client.from("dataset_chunks").delete().eq("dataset_key", "consumption_rows");
+        localStorage.removeItem("dmp.cloudSnapshotVersion");
+      } catch (error) {
+        if (!isCloudSnapshotMissing(error)) throw error;
+      }
     }
 
     async function deleteCloudConsumptionDates(dates) {
@@ -3218,17 +3231,9 @@
         }
         els.dbStatus.textContent = "云端：正在合并上传数据";
         try {
-          await ensureCloudRowsLoadedForUpload();
-          const existingRows = state.allRows.slice();
           await upsertCloudConsumption(rows);
-          const mergedRows = replaceRowsByDates(existingRows, rows);
-          setRows(mergedRows, "Supabase 云端数据库");
-          if (state.dbReady) {
-            await clearLocalRowsDb();
-            await mergeRowsToDb(mergedRows);
-          }
-          await saveCloudDatasetSnapshot(mergedRows);
-          els.dbStatus.textContent = `云端：已上传/合并 ${formatNumber(rows.length)} 行，当前显示 ${formatNumber(mergedRows.length)} 行`;
+          await loadCloudData();
+          els.dbStatus.textContent = `云端：已上传 ${formatNumber(rows.length)} 行，并按云端完整明细刷新报表 ${formatNumber(state.allRows.length)} 行`;
           toast(`${file.name} 已上传到云端`);
         } catch (error) {
           const message = error.message || error;
