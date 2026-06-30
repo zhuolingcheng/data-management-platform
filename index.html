@@ -2737,13 +2737,11 @@
     }
 
     async function syncCloudDataIfNeeded() {
-      let cloudCount = null;
       let cloudLatestDate = "";
       try {
-        cloudCount = await getCloudConsumptionCount();
         cloudLatestDate = await getCloudLatestRowDate();
       } catch (error) {
-        els.dbStatus.textContent = `云端：明细行数读取失败，正在尝试读取快照`;
+        els.dbStatus.textContent = `云端：最新日期读取失败，正在尝试读取快照`;
       }
       try {
         const snapshotMeta = await getCloudSnapshotMeta();
@@ -2751,15 +2749,9 @@
           const snapshotCount = Number(snapshotMeta.row_count);
           const snapshotVersion = String(snapshotMeta.version || "");
           const versionMatches = snapshotVersion.startsWith(`${SNAPSHOT_SCHEMA_VERSION}-`);
-          const countMatches = !Number.isFinite(cloudCount) || cloudCount === snapshotCount;
-          if (versionMatches && countMatches) {
+          if (versionMatches) {
             const loaded = await loadCloudSnapshot(snapshotMeta, { expectedLatestDate: cloudLatestDate });
             if (loaded) return;
-            await loadCloudData();
-            return;
-          }
-          if (Number.isFinite(cloudCount) && cloudCount !== snapshotCount) {
-            els.dbStatus.textContent = `云端：明细 ${formatNumber(cloudCount)} 行与快照 ${formatNumber(snapshotCount)} 行不一致，正在读取完整明细并重建快照`;
             await loadCloudData();
             return;
           }
@@ -2772,9 +2764,7 @@
       } catch (error) {
         els.dbStatus.textContent = `云端：快照读取失败，正在改读明细数据`;
       }
-      if (!Number.isFinite(cloudCount)) {
-        cloudCount = await getCloudConsumptionCount();
-      }
+      const cloudCount = await getCloudConsumptionCount();
       if (!Number.isFinite(cloudCount)) return;
       if (cloudCount === 0) {
         if (state.allRows.length) {
@@ -3002,25 +2992,16 @@
     async function deleteCloudConsumptionDates(dates) {
       if (!dates.length) return 0;
       els.dbStatus.textContent = `云端：正在删除 ${dates.join("、")} 的旧明细`;
-      try {
-        const { data, error } = await state.cloud.client.rpc("delete_consumption_dates", { date_values: dates });
-        if (error) throw error;
-        return Number(data) || 0;
-      } catch (error) {
-        const message = error.message || String(error);
-        if (!/delete_consumption_dates|schema cache|function|statement timeout|canceling statement/i.test(message)) throw error;
-      }
-      let removed = 0;
-      for (let i = 0; i < dates.length; i += 20) {
-        els.dbStatus.textContent = `云端：正在替换旧日期数据 ${formatNumber(Math.min(i + 20, dates.length))}/${formatNumber(dates.length)} 天`;
-        const { error, count } = await state.cloud.client
+      for (let i = 0; i < dates.length; i += 1) {
+        const date = dates[i];
+        els.dbStatus.textContent = `云端：正在替换 ${date} 旧明细（${formatNumber(i + 1)}/${formatNumber(dates.length)} 天）`;
+        const { error } = await state.cloud.client
           .from("consumption_rows")
-          .delete({ count: "exact" })
-          .in("row_date", dates.slice(i, i + 20));
+          .delete()
+          .eq("row_date", date);
         if (error) throw error;
-        removed += Number(count) || 0;
       }
-      return removed;
+      return 0;
     }
 
     async function upsertCloudMapping(rows) {
@@ -3240,7 +3221,7 @@
         toast("当前账号只有查看权限，无法同步云端数据");
         return;
       }
-      loadLatestCloudDataset({ forceDetailRows: canCloudEdit() });
+      syncCloudDataIfNeeded();
     });
     els.reportPageBtn.addEventListener("click", () => showPage("report"));
     els.targetPageBtn.addEventListener("click", () => showPage("target"));
