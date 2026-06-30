@@ -3008,7 +3008,7 @@
         return Number(data) || 0;
       } catch (error) {
         const message = error.message || String(error);
-        if (!/delete_consumption_dates|schema cache|function/i.test(message)) throw error;
+        if (!/delete_consumption_dates|schema cache|function|statement timeout|canceling statement/i.test(message)) throw error;
       }
       let removed = 0;
       for (let i = 0; i < dates.length; i += 20) {
@@ -3271,8 +3271,18 @@
         els.dbStatus.textContent = "云端：正在合并上传数据";
         try {
           await upsertCloudConsumption(rows);
-          await loadCloudData();
-          els.dbStatus.textContent = `云端：已上传 ${formatNumber(rows.length)} 行，并按云端完整明细刷新报表 ${formatNumber(state.allRows.length)} 行`;
+          const localMergedRows = replaceRowsByDates(state.allRows.slice(), rows);
+          setRows(localMergedRows, "Supabase 云端数据库");
+          if (state.dbReady) {
+            await clearLocalRowsDb();
+            await mergeRowsToDb(localMergedRows);
+          }
+          try {
+            await saveCloudDatasetSnapshot(localMergedRows);
+          } catch (snapshotError) {
+            toast(`云端已上传，但快照刷新失败：${snapshotError.message || snapshotError}`);
+          }
+          els.dbStatus.textContent = `云端：已上传 ${formatNumber(rows.length)} 行，并更新当前报表 ${formatNumber(localMergedRows.length)} 行`;
           toast(`${file.name} 已上传到云端`);
         } catch (error) {
           const message = error.message || error;
