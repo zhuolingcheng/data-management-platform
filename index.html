@@ -2864,10 +2864,15 @@
         return;
       }
       try {
+        const { data: roleData, error: roleError } = await state.cloud.client.rpc("current_user_role");
+        if (!roleError && roleData) {
+          state.cloud.role = roleData;
+          return;
+        }
         const { data, error } = await state.cloud.client
           .from("team_members")
           .select("role")
-          .eq("email", email.toLowerCase())
+          .eq("email", email.toLowerCase().trim())
           .maybeSingle();
         if (error) throw error;
         state.cloud.role = data?.role || "viewer";
