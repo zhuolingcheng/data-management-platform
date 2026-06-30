@@ -2661,7 +2661,7 @@
         if (loadId !== state.cloud.loadId) return true;
         const rows = chunks.flatMap(chunk => Array.isArray(chunk.payload) ? chunk.payload : []).map(enrichRow);
         if (rows.length !== Number(snapshotMeta.row_count)) {
-          els.dbStatus.textContent = `云端：快照行数异常（快照 ${formatNumber(snapshotMeta.row_count)} 行，实际 ${formatNumber(rows.length)} 行），正在改读明细`;
+          els.dbStatus.textContent = `云端：快照行数异常（快照 ${formatNumber(snapshotMeta.row_count)} 行，实际 ${formatNumber(rows.length)} 行），已停止全量读取以节省 IO`;
           return false;
         }
         const snapshotLatestDate = latestDate(rows);
@@ -2752,30 +2752,35 @@
           if (versionMatches) {
             const loaded = await loadCloudSnapshot(snapshotMeta, { expectedLatestDate: cloudLatestDate });
             if (loaded) return;
-            await loadCloudData();
+            if (state.allRows.length) {
+              els.dbStatus.textContent = `云端：快照未更新，已使用本地缓存 ${formatNumber(state.allRows.length)} 行，避免全量读取消耗 IO`;
+              return;
+            }
+            els.dbStatus.textContent = "云端：快照未更新，请管理员上传一次最新数据以重建快照";
             return;
           }
           if (!versionMatches) {
-            els.dbStatus.textContent = "云端：检测到旧版快照，正在读取完整明细并重建快照";
-            await loadCloudData();
+            if (state.allRows.length) {
+              els.dbStatus.textContent = `云端：检测到旧版快照，已使用本地缓存 ${formatNumber(state.allRows.length)} 行，避免全量读取消耗 IO`;
+              return;
+            }
+            els.dbStatus.textContent = "云端：检测到旧版快照，请管理员上传一次最新数据以重建快照";
             return;
           }
         }
       } catch (error) {
-        els.dbStatus.textContent = `云端：快照读取失败，正在改读明细数据`;
-      }
-      const cloudCount = await getCloudConsumptionCount();
-      if (!Number.isFinite(cloudCount)) return;
-      if (cloudCount === 0) {
         if (state.allRows.length) {
-          await clearLocalRowsDb();
-          resetRowsAfterClear();
+          els.dbStatus.textContent = `云端：快照读取失败，已使用本地缓存 ${formatNumber(state.allRows.length)} 行，避免全量读取消耗 IO`;
+          return;
         }
-        els.dbStatus.textContent = "云端：暂无消耗数据，请重新上传";
+        els.dbStatus.textContent = "云端：快照读取失败，请稍后再试";
         return;
       }
-      els.dbStatus.textContent = `云端：正在读取完整明细 ${formatNumber(cloudCount)} 行`;
-      await loadCloudData();
+      if (state.allRows.length) {
+        els.dbStatus.textContent = `云端：暂无可用快照，已使用本地缓存 ${formatNumber(state.allRows.length)} 行，避免全量读取消耗 IO`;
+        return;
+      }
+      els.dbStatus.textContent = "云端：暂无可用快照，请管理员上传一次最新数据以生成快照";
     }
 
     async function loadCloudData() {
@@ -2840,21 +2845,27 @@
     async function loadLatestCloudDataset(options = {}) {
       if (!state.cloud.enabled || !state.cloud.user) return;
       if (options.forceDetailRows) {
-        await loadCloudData();
+        if (canCloudEdit()) {
+          await loadCloudData();
+        } else {
+          els.dbStatus.textContent = "云端：当前账号仅可查看，已禁止全量读取明细";
+        }
         return;
       }
       const snapshotLoaded = await loadCloudSnapshot();
       if (snapshotLoaded) return;
-      await loadCloudData();
+      if (state.allRows.length) {
+        els.dbStatus.textContent = `云端：快照不可用，已使用本地缓存 ${formatNumber(state.allRows.length)} 行`;
+        return;
+      }
+      els.dbStatus.textContent = "云端：快照不可用，请管理员上传一次最新数据以生成快照";
     }
 
     async function ensureCloudRowsLoadedForUpload() {
       if (!state.cloud.enabled || !state.cloud.user || !canCloudEdit()) return;
-      const cloudCount = await getCloudConsumptionCount();
-      if (Number.isFinite(cloudCount) && cloudCount > 0) {
-        els.dbStatus.textContent = `云端：上传前正在校验完整历史数据 ${formatNumber(cloudCount)} 行`;
-        await loadCloudData();
-      }
+      const snapshotLoaded = await loadCloudSnapshot();
+      if (snapshotLoaded || state.allRows.length) return;
+      els.dbStatus.textContent = "云端：未读取到快照，上传将只替换本次文件日期的数据";
     }
 
     async function loadCloudRole() {
